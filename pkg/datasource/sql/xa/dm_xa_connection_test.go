@@ -34,13 +34,17 @@ import (
 )
 
 type dmMockRows struct {
-	idx  int
-	data [][]interface{}
+	idx    int
+	closed bool
+	data   [][]interface{}
 }
 
 func (m *dmMockRows) Columns() []string { return []string{"formatid", "gtrid", "bqual"} }
 
-func (m *dmMockRows) Close() error { return nil }
+func (m *dmMockRows) Close() error {
+	m.closed = true
+	return nil
+}
 
 func (m *dmMockRows) Next(dest []driver.Value) error {
 	if m.idx == len(m.data) {
@@ -226,17 +230,19 @@ func TestDMXAConnRecover(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConn := mock.NewMockTestDriverConn(ctrl)
-	mockConn.EXPECT().QueryContext(gomock.Any(), dmXARecoverQuery, gomock.Any()).Return(&dmMockRows{
+	rows := &dmMockRows{
 		data: [][]interface{}{
 			{int64(dmXAFormatID), "676C6F62616C", "2D313233"},
 			{[]byte("9752"), []byte("616E6F74686572"), []byte("2D343536")},
 		},
-	}, nil)
+	}
+	mockConn.EXPECT().QueryContext(gomock.Any(), dmXARecoverQuery, gomock.Any()).Return(rows, nil)
 
 	conn := &DMXAConn{Conn: mockConn}
 	got, err := conn.Recover(context.Background(), TMStartRScan|TMEndRScan)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"global-123", "another-456"}, got)
+	assert.True(t, rows.closed)
 }
 
 func TestDMXARecoverFallsBackToPrepare(t *testing.T) {
@@ -257,6 +263,7 @@ func TestDMXARecoverFallsBackToPrepare(t *testing.T) {
 	got, err := conn.Recover(context.Background(), TMStartRScan)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"global-123"}, got)
+	assert.True(t, mockRows.closed)
 }
 
 func TestDMXAConnRecoverFlags(t *testing.T) {

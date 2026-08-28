@@ -33,13 +33,17 @@ import (
 )
 
 type oracleMockRows struct {
-	idx  int
-	data [][]interface{}
+	idx    int
+	closed bool
+	data   [][]interface{}
 }
 
 func (m *oracleMockRows) Columns() []string { return []string{"formatid", "gtrid", "bqual"} }
 
-func (m *oracleMockRows) Close() error { return nil }
+func (m *oracleMockRows) Close() error {
+	m.closed = true
+	return nil
+}
 
 func (m *oracleMockRows) Next(dest []driver.Value) error {
 	if m.idx == len(m.data) {
@@ -216,17 +220,19 @@ func TestOracleXAConnRecover(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConn := mock.NewMockTestDriverConn(ctrl)
-	mockConn.EXPECT().QueryContext(gomock.Any(), oracleXARecoverQuery, gomock.Any()).Return(&oracleMockRows{
+	rows := &oracleMockRows{
 		data: [][]interface{}{
 			{int64(oracleXAFormatID), "676C6F62616C", "2D313233"},
 			{[]byte("9752"), []byte("616E6F74686572"), []byte("2D343536")},
 		},
-	}, nil)
+	}
+	mockConn.EXPECT().QueryContext(gomock.Any(), oracleXARecoverQuery, gomock.Any()).Return(rows, nil)
 
 	conn := &OracleXAConn{Conn: mockConn}
 	got, err := conn.Recover(context.Background(), TMStartRScan|TMEndRScan)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"global-123", "another-456"}, got)
+	assert.True(t, rows.closed)
 }
 
 func TestOracleXARecoverFallsBackToPrepare(t *testing.T) {
@@ -247,6 +253,7 @@ func TestOracleXARecoverFallsBackToPrepare(t *testing.T) {
 	got, err := conn.Recover(context.Background(), TMStartRScan)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"global-123"}, got)
+	assert.True(t, mockRows.closed)
 }
 
 func TestOracleXAConnRecoverFlags(t *testing.T) {
