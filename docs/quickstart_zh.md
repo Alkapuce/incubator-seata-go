@@ -284,6 +284,17 @@ db, err := sql.Open(
 )
 ```
 
+如果使用 MariaDB XA，只需要将驱动切换为 `seata-xa-mariadb`：
+
+```go
+db, err := sql.Open(
+	"seata-xa-mariadb",
+	"root:password@tcp(127.0.0.1:3306)/seata_demo?charset=utf8mb4&parseTime=True&multiStatements=true",
+)
+```
+
+> MariaDB XA 使用与 MySQL 兼容的 XA 控制语句。Seata Go 保留独立的 MariaDB driver 名称和 DBType，便于后续独立维护 MariaDB 版本说明、恢复行为和错误处理。
+
 如果使用 PostgreSQL XA，可使用基于 pgx 的驱动 `seata-xa-postgres`：
 
 ```go
@@ -294,5 +305,7 @@ db, err := sql.Open(
 ```
 
 > PostgreSQL XA 依赖 prepared transaction，使用前需要在 PostgreSQL 服务端开启 `max_prepared_transactions > 0`。
+
+> MariaDB 专属配置和排查说明：[MariaDB XA 使用指南](./xa_mariadb_zh.md)。
 
 > 完整示例可参考：[XA 模式示例](https://github.com/apache/incubator-seata-go-samples/tree/main/xa/basic)。

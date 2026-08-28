@@ -34,6 +34,12 @@ func TestParseConnectorMetadataPostgres(t *testing.T) {
 	assert.Equal(t, "seata_demo", meta.dbName)
 }
 
+func TestParseConnectorMetadataMariaDB(t *testing.T) {
+	meta, err := parseConnectorMetadata("root:password@tcp(127.0.0.1:3306)/seata_demo?multiStatements=true", types.DBTypeMARIADB)
+	assert.NoError(t, err)
+	assert.Equal(t, "seata_demo", meta.dbName)
+}
+
 func TestSeataConnectorConnectPostgres(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

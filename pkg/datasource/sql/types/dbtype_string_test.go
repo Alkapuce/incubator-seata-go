@@ -34,7 +34,7 @@ func TestDBType_String(t *testing.T) {
 		{"DBTypePostgreSQL", DBTypePostgreSQL, "DBTypePostgreSQL"},
 		{"DBTypeSQLServer", DBTypeSQLServer, "DBTypeSQLServer"},
 		{"DBTypeOracle", DBTypeOracle, "DBTypeOracle"},
-		{"DBTypeMARIADB", DBTypeMARIADB, "DBType(6)"},
+		{"DBTypeMARIADB", DBTypeMARIADB, "DBTypeMARIADB"},
 		{"Invalid negative", DBType(-1), "DBType(-1)"},
 		{"Invalid large", DBType(100), "DBType(100)"},
 	}
@@ -54,4 +54,5 @@ func TestDBType_StringValidation(t *testing.T) {
 	assert.Contains(t, DBTypePostgreSQL.String(), "PostgreSQL")
 	assert.Contains(t, DBTypeSQLServer.String(), "SQLServer")
 	assert.Contains(t, DBTypeOracle.String(), "Oracle")
+	assert.Contains(t, DBTypeMARIADB.String(), "MARIADB")
 }

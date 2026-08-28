@@ -284,6 +284,17 @@ db, err := sql.Open(
 )
 ```
 
+For MariaDB XA, switch the driver to `seata-xa-mariadb`:
+
+```go
+db, err := sql.Open(
+	"seata-xa-mariadb",
+	"root:password@tcp(127.0.0.1:3306)/seata_demo?charset=utf8mb4&parseTime=True&multiStatements=true",
+)
+```
+
+> MariaDB XA uses MySQL-compatible XA control statements. Seata Go keeps a dedicated MariaDB driver name and DB type so MariaDB version notes, recovery behavior, and error handling can evolve independently.
+
 For PostgreSQL XA, use the pgx-based driver `seata-xa-postgres`:
 
 ```go
@@ -294,5 +305,7 @@ db, err := sql.Open(
 ```
 
 > PostgreSQL XA relies on prepared transactions. Set `max_prepared_transactions > 0` on the PostgreSQL server before using this mode.
+
+> MariaDB-specific setup and troubleshooting: [MariaDB XA Guide](./xa_mariadb.md).
 
 > Full example: [XA Example](https://github.com/apache/incubator-seata-go-samples/tree/main/xa/basic).

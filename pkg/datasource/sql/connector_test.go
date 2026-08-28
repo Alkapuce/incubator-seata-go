@@ -171,3 +171,28 @@ func Test_seataXAConnector_Connect(t *testing.T) {
 	assert.True(t, ok, "need return seata xa connection")
 	assert.True(t, xaConn.txCtx.TransactionMode == types.Local, "init need local tx")
 }
+
+func Test_seataXAConnector_Connect_MariaDB(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMgr := initMockResourceManager(branch.BranchTypeXA, ctrl)
+	_ = mockMgr
+
+	db, err := sql.Open(SeataXAMariaDBDriver, "root:seata_go@tcp(127.0.0.1:3306)/seata_go_test?multiStatements=true")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer db.Close()
+
+	proxyConnector := initMockXaConnector(t, ctrl, db, initMockConnector)
+	conn, err := proxyConnector.Connect(context.Background())
+	assert.NoError(t, err)
+
+	xaConn, ok := conn.(*XAConn)
+	assert.True(t, ok, "need return seata xa connection")
+	assert.Equal(t, types.DBTypeMARIADB, xaConn.dbType)
+	assert.Equal(t, "seata_go_test", xaConn.dbName)
+	assert.True(t, xaConn.txCtx.TransactionMode == types.Local, "init need local tx")
+}
