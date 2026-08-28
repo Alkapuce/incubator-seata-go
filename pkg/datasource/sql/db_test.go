@@ -23,7 +23,21 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/types"
+	"seata.apache.org/seata-go/v2/pkg/rm"
 )
+
+func TestDBResourceGetResourceGroupIdUsesRMConfig(t *testing.T) {
+	originalConfig := rm.GetRmConfig()
+	defer rm.InitRm(originalConfig)
+
+	rm.InitRm(rm.RmConfig{TxServiceGroup: "test-tx-service-group"})
+
+	assert.Equal(t, "test-tx-service-group", (&DBResource{}).GetResourceGroupId())
+
+	rm.InitRm(rm.RmConfig{})
+
+	assert.Equal(t, "", (&DBResource{}).GetResourceGroupId())
+}
 
 func TestDBResourceCheckDbVersionControlsXAConnectionHold(t *testing.T) {
 	tests := []struct {

@@ -30,6 +30,7 @@ import (
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/util"
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/xa"
 	"seata.apache.org/seata-go/v2/pkg/protocol/branch"
+	"seata.apache.org/seata-go/v2/pkg/rm"
 	"seata.apache.org/seata-go/v2/pkg/util/log"
 )
 
@@ -121,7 +122,7 @@ type DBResource struct {
 }
 
 func (db *DBResource) GetResourceGroupId() string {
-	panic("implement me")
+	return rm.GetRmConfig().TxServiceGroup
 }
 
 func (db *DBResource) init() {
