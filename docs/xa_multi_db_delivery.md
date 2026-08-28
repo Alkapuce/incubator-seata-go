@@ -27,11 +27,11 @@ This document summarizes the local delivery scope for XA multi-database support 
 | MySQL/MariaDB XID quoting | MySQL-compatible XA control statements now quote XA XIDs through a shared helper, so embedded single quotes are escaped before `XA START`, `XA END`, `XA PREPARE`, `XA COMMIT`, or `XA ROLLBACK` is executed. |
 | PostgreSQL | Keeps the prepared-transaction XA resource, closes `pg_prepared_xacts` recovery rows, accepts recover payloads as string or `[]byte`, and classifies `pgconn.PgError` or text errors with SQLSTATE `42704` / `55000` as already-ended for phase-two idempotency handling. |
 | MariaDB | Adds `seata-xa-mariadb`, a MariaDB XA resource factory, MySQL-compatible XA lifecycle statements, recovery parsing, MariaDB-specific error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, integration tests, and user documentation. |
-| Oracle | Adds Oracle `DBMS_XA` XID mapping, lifecycle calls, readonly prepare status reporting, recovery parsing, prepared-statement fallback, already-ended error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, unit tests, and setup/troubleshooting documentation. |
+| Oracle | Adds Oracle `DBMS_XA` XID mapping, lifecycle calls, readonly prepare status reporting, recovery parsing with row cleanup, prepared-statement fallback, already-ended error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, unit tests, and setup/troubleshooting documentation. |
 | XA prepared statements | `XAConn.PrepareContext` now returns statements whose `StmtExecContext` / `StmtQueryContext` executions enter the same XA branch lifecycle as direct `ExecContext` / `QueryContext`; query rows still defer branch commit until `Rows.Close`. |
 | Datasource resource group | `DBResource.GetResourceGroupId` now returns the current RM transaction service group instead of panicking, keeping the datasource resource interface aligned with the RM registration contract. |
 | Vendor adapters | Adds `RegisterSeataXADriver` and `SeataDriverDescriptor` so applications can register vendor `database/sql/driver.Driver` implementations without adding them as Seata Go dependencies. |
-| Dameng prototype | Adds `types.DBTypeDM` and a `DBMS_XA`-based XA resource prototype with XID mapping, lifecycle calls, readonly prepare status reporting, recovery parsing, error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, unit tests, and documentation. |
+| Dameng prototype | Adds `types.DBTypeDM` and a `DBMS_XA`-based XA resource prototype with XID mapping, lifecycle calls, readonly prepare status reporting, recovery parsing with row cleanup, error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, unit tests, and documentation. |
 | Kingbase and Oscar | Documents extension direction and open questions. Kingbase should be validated first against PostgreSQL-style prepared transactions. Oscar needs public Go driver, XA API, recovery, and error-code confirmation before code is added. |
 
 ## Verification Commands
@@ -46,6 +46,7 @@ go test ./pkg/rm/remoting/grpc -run 'TestGetGrpcRMRemotingInstance|TestGrpcRMRem
 go test ./pkg/remoting/grpc ./pkg/remoting/processor/client
 go test ./pkg/datasource/sql/xa -run 'Postgres|MariaDB|Oracle|DM' -v
 go test ./pkg/datasource/sql/xa -run 'TestPostgresXAConn_Recover|TestPostgresXAErrorClassifierIsAlreadyEnded' -v
+go test ./pkg/datasource/sql/xa -run 'TestOracleXAConnRecover|TestOracleXARecoverFallsBackToPrepare|TestDMXAConnRecover|TestDMXARecoverFallsBackToPrepare' -v
 go test ./pkg/datasource/sql/xa -run 'TestMysqlXAConn_Recover|TestMariaDBXAConnRecover' -v
 go test ./pkg/datasource/sql/xa -run 'TestMysqlXAConn_LifecycleSQLQuotesXID|TestMariaDBXAConnLifecycleSQL' -v
 go test ./pkg/datasource/sql -run 'TestXAConn_PreparedExecContext_AutoCommitCompletesXABranch|TestXAConn_PreparedQueryContext_AutoCommitDefersBranchCommitUntilRowsClose' -v
@@ -68,7 +69,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | --- | --- |
 | New dependencies | No `go.mod` or `go.sum` changes are required by the current implementation. |
 | Vendor drivers | Oracle and Dameng drivers are injected by applications through the vendor adapter API; they are not added as direct project dependencies. |
-| Recover row cleanup | MySQL, MariaDB, and PostgreSQL recover readers close returned rows and accept driver recover data as string or bytes. |
+| Recover row cleanup | MySQL, MariaDB, PostgreSQL, Oracle, and Dameng recover readers close returned rows; SQL recover paths accept driver data as string or bytes, and DBMS_XA recover paths accept numeric/string/bytes row fields covered by unit tests. |
 | XID SQL literal quoting | MySQL and MariaDB XA control statements escape embedded single quotes in branch XIDs before building SQL string literals. |
 | XA connection hold policy | `DBResource.checkDbVersion` owns the hold decision: MySQL versions before 8.0.29, MariaDB, Oracle, and Dameng hold prepared connections; MySQL 8.0.29+ and PostgreSQL do not get held only because their DB type is known. |
 | Prepared statement XA lifecycle | Context-aware prepared statement executions join the XA branch lifecycle at execution time, not prepare time, and prepared query rows keep the existing close-time branch commit behavior. |
