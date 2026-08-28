@@ -24,6 +24,7 @@
 | 范围 | 状态 |
 | --- | --- |
 | MySQL recover 清理 | 现有 MySQL XA resource 现在会关闭 `XA RECOVER` 返回的 rows，并同时接受 string 与 `[]byte` recover payload，与 MariaDB 已覆盖的 recover 数据形态保持一致。 |
+| MySQL/MariaDB XID quoting | MySQL-compatible XA 控制语句现在通过共享 helper 引用 XA XID，执行 `XA START`、`XA END`、`XA PREPARE`、`XA COMMIT` 或 `XA ROLLBACK` 前会转义 XID 内嵌单引号。 |
 | PostgreSQL | 保留 prepared transaction XA resource，并已将 `pgconn.PgError` 或文本错误中的 SQLSTATE `42704` / `55000` 分类为 already-ended，用于二阶段幂等状态处理。 |
 | MariaDB | 新增 `seata-xa-mariadb`、MariaDB XA resource factory、MySQL-compatible XA 生命周期语句、recover 解析、MariaDB 专属错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、集成测试和用户文档。 |
 | Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析、prepared statement fallback、already-ended 错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和配置/排查文档。 |
@@ -45,6 +46,7 @@ go test ./pkg/rm/remoting/grpc -run 'TestGetGrpcRMRemotingInstance|TestGrpcRMRem
 go test ./pkg/remoting/grpc ./pkg/remoting/processor/client
 go test ./pkg/datasource/sql/xa -run 'Postgres|MariaDB|Oracle|DM' -v
 go test ./pkg/datasource/sql/xa -run 'TestMysqlXAConn_Recover|TestMariaDBXAConnRecover' -v
+go test ./pkg/datasource/sql/xa -run 'TestMysqlXAConn_LifecycleSQLQuotesXID|TestMariaDBXAConnLifecycleSQL' -v
 go test ./pkg/datasource/sql -run 'TestXAConn_PreparedExecContext_AutoCommitCompletesXABranch|TestXAConn_PreparedQueryContext_AutoCommitDefersBranchCommitUntilRowsClose' -v
 go test ./pkg/datasource/sql -run 'TestDBResourceGetResourceGroupIdUsesRMConfig|TestDBResourceCheckDbVersionControlsXAConnectionHold|TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
@@ -66,6 +68,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | 新增依赖 | 当前实现不需要修改 `go.mod` 或 `go.sum`。 |
 | 厂商 driver | Oracle 和达梦 driver 由应用通过厂商 adapter API 注入，没有加入项目直接依赖。 |
 | Recover rows 清理 | MySQL 和 MariaDB `XA RECOVER` 读取路径都会关闭 rows，并接受 driver 以 string 或 bytes 返回 recover data。 |
+| XID SQL literal quoting | MySQL 和 MariaDB XA 控制语句在构造 SQL string literal 前会转义 branch XID 内嵌单引号。 |
 | XA 连接保活策略 | `DBResource.checkDbVersion` 统一决定是否保活：MySQL 8.0.29 之前版本、MariaDB、Oracle 和达梦保留 prepared 连接；MySQL 8.0.29+ 和 PostgreSQL 不再仅因 DBType 已知而强制保活。 |
 | Prepared statement XA 生命周期 | 带 context 的 prepared statement 在执行时进入 XA branch 生命周期，而不是在 prepare 时提交；prepared query rows 继续保持 close-time branch commit 行为。 |
 | Datasource resource group | `DBResource.GetResourceGroupId` 跟随 `rm.GetRmConfig().TxServiceGroup`，`rm.Resource` 必需方法可安全调用，并与 RM 注册请求使用的 transaction service group 保持一致。 |
