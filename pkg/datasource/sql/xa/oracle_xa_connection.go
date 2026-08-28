@@ -20,6 +20,7 @@ package xa
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"time"
 
@@ -63,32 +64,46 @@ type OracleXAConn struct {
 
 func (c *OracleXAConn) Start(ctx context.Context, xid string, flags int) error {
 	log.Infof("xa branch start (oracle), xid %s", xid)
-	// TODO: DBMS_XA.XA_START via PL/SQL block, map xid to DBMS_XA_XID
-	return fmt.Errorf("Oracle XA start not yet implemented")
+	flags, err := oracleXAStartFlag(flags)
+	if err != nil {
+		return err
+	}
+	return execOracleXA(ctx, c.Conn, "XA_START", xid, "l_xid, :flag", []driver.NamedValue{
+		{Name: "flag", Value: int64(flags)},
+	}, []string{"DBMS_XA.XA_OK"})
 }
 
 func (c *OracleXAConn) End(ctx context.Context, xid string, flags int) error {
 	log.Infof("xa branch end (oracle), xid %s", xid)
-	// TODO: DBMS_XA.XA_END via PL/SQL block
-	return fmt.Errorf("Oracle XA end not yet implemented")
+	flags, err := oracleXAEndFlag(flags)
+	if err != nil {
+		return err
+	}
+	return execOracleXA(ctx, c.Conn, "XA_END", xid, "l_xid, :flag", []driver.NamedValue{
+		{Name: "flag", Value: int64(flags)},
+	}, []string{"DBMS_XA.XA_OK"})
 }
 
 func (c *OracleXAConn) XAPrepare(ctx context.Context, xid string) error {
 	log.Infof("xa branch prepare (oracle), xid %s", xid)
-	// TODO: DBMS_XA.XA_PREPARE via PL/SQL block
-	return fmt.Errorf("Oracle XA prepare not yet implemented")
+	return execOracleXA(ctx, c.Conn, "XA_PREPARE", xid, "l_xid", nil, []string{
+		"DBMS_XA.XA_OK",
+		"DBMS_XA.XA_RDONLY",
+	})
 }
 
 func (c *OracleXAConn) Commit(ctx context.Context, xid string, onePhase bool) error {
 	log.Infof("xa branch commit (oracle), xid %s, onePhase %v", xid, onePhase)
-	// TODO: DBMS_XA.XA_COMMIT via PL/SQL block
-	return fmt.Errorf("Oracle XA commit not yet implemented")
+	onePhaseArg := "FALSE"
+	if onePhase {
+		onePhaseArg = "TRUE"
+	}
+	return execOracleXA(ctx, c.Conn, "XA_COMMIT", xid, "l_xid, "+onePhaseArg, nil, []string{"DBMS_XA.XA_OK"})
 }
 
 func (c *OracleXAConn) Rollback(ctx context.Context, xid string) error {
 	log.Infof("xa branch rollback (oracle), xid %s", xid)
-	// TODO: DBMS_XA.XA_ROLLBACK via PL/SQL block
-	return fmt.Errorf("Oracle XA rollback not yet implemented")
+	return execOracleXA(ctx, c.Conn, "XA_ROLLBACK", xid, "l_xid", nil, []string{"DBMS_XA.XA_OK"})
 }
 
 func (c *OracleXAConn) Recover(ctx context.Context, flag int) ([]string, error) {
@@ -100,8 +115,7 @@ func (c *OracleXAConn) Recover(ctx context.Context, flag int) ([]string, error) 
 }
 
 func (c *OracleXAConn) Forget(ctx context.Context, xid string) error {
-	// TODO: DBMS_XA.XA_FORGET via PL/SQL block
-	return fmt.Errorf("Oracle XA forget not yet implemented")
+	return execOracleXA(ctx, c.Conn, "XA_FORGET", xid, "l_xid", nil, []string{"DBMS_XA.XA_OK"})
 }
 
 func (c *OracleXAConn) GetTransactionTimeout() time.Duration { return 0 }
@@ -109,3 +123,28 @@ func (c *OracleXAConn) GetTransactionTimeout() time.Duration { return 0 }
 func (c *OracleXAConn) IsSameRM(ctx context.Context, resource XAResource) bool { return false }
 
 func (c *OracleXAConn) SetTransactionTimeout(duration time.Duration) bool { return false }
+
+func oracleXAStartFlag(flags int) (int, error) {
+	switch flags {
+	case TMNoFlags:
+		return oracleXATransLoose, nil
+	case TMJoin, TMResume:
+		return flags, nil
+	default:
+		return 0, errors.New("invalid arguments")
+	}
+}
+
+func oracleXAEndFlag(flags int) (int, error) {
+	switch flags {
+	case TMSuccess, TMSuspend:
+		return flags, nil
+	case TMFail:
+		// Oracle DBMS_XA does not accept TMFAIL for XA_END. The Go XAConn rollback
+		// path always ends the branch before rolling it back, so disassociate with
+		// TMSUCCESS here and let XA_ROLLBACK perform the actual rollback decision.
+		return TMSuccess, nil
+	default:
+		return 0, errors.New("invalid arguments")
+	}
+}
