@@ -32,13 +32,17 @@ import (
 )
 
 type postgresMockRows struct {
-	idx  int
-	data [][]interface{}
+	idx    int
+	closed bool
+	data   [][]interface{}
 }
 
 func (m *postgresMockRows) Columns() []string { return []string{"gid"} }
 
-func (m *postgresMockRows) Close() error { return nil }
+func (m *postgresMockRows) Close() error {
+	m.closed = true
+	return nil
+}
 
 func (m *postgresMockRows) Next(dest []driver.Value) error {
 	if m.idx == len(m.data) {
@@ -124,13 +128,15 @@ func TestPostgresXAConn_Recover(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConn := mock.NewMockTestDriverConn(ctrl)
+	rows := &postgresMockRows{data: [][]interface{}{{"xid"}, {[]byte("another-xid")}}}
 	mockConn.EXPECT().QueryContext(gomock.Any(), "SELECT gid FROM pg_prepared_xacts WHERE database = current_database()", gomock.Any()).
-		Return(&postgresMockRows{data: [][]interface{}{{"xid"}, {"another-xid"}}}, nil)
+		Return(rows, nil)
 
 	conn := &PostgresXAConn{Conn: mockConn}
 	got, err := conn.Recover(context.Background(), TMStartRScan|TMEndRScan)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"xid", "another-xid"}, got)
+	assert.True(t, rows.closed)
 }
 
 func TestPostgresXAErrorClassifierIsAlreadyEnded(t *testing.T) {
