@@ -30,6 +30,7 @@
   - support PostgreSQL XA via pgx driver
   - support MariaDB XA resource factory, driver registration, lifecycle statements, recovery scan, and MariaDB-specific error classification
   - add Oracle DBMS_XA XID mapping, PL/SQL lifecycle helper, recovery scan parser, and already-ended error classification
+  - add Oracle XA setup, permission, XID, recovery, and troubleshooting documentation
   - add public Seata XA driver descriptor registration for vendor database adapters
   - [[#1130](https://github.com/apache/incubator-seata-go/issues/1130)] support MySQL multi-value INSERT in AT mode for composite and mixed primary keys
 

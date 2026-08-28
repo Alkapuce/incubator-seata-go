@@ -31,6 +31,7 @@ Seata-go 是一款开源的分布式事务解决方案，提供高性能和简�
 - 支持基于 pgx 驱动的 PostgreSQL XA
 - 支持 MariaDB XA resource factory、driver 注册、生命周期语句、恢复扫描和 MariaDB 专属错误分类
 - 新增 Oracle DBMS_XA XID 映射、PL/SQL 生命周期 helper、恢复扫描解析和 already-ended 错误分类
+- 新增 Oracle XA 配置、权限、XID、恢复和故障排查文档
 - 新增公开的 Seata XA driver descriptor 注册入口，用于厂商数据库适配
 - [[#1130](https://github.com/apache/incubator-seata-go/issues/1130)] 支持 AT 模式下 MySQL 多值 INSERT 的复合主键与混合主键场景
 

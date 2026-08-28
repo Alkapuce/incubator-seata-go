@@ -306,6 +306,25 @@ db, err := sql.Open(
 
 > PostgreSQL XA 依赖 prepared transaction，使用前需要在 PostgreSQL 服务端开启 `max_prepared_transactions > 0`。
 
+如果使用 Oracle XA，先通过厂商 adapter API 注册选定的 Oracle driver，再打开注册后的 driver 名称：
+
+```go
+err := seatasql.RegisterSeataXADriver("seata-xa-oracle", seatasql.SeataDriverDescriptor{
+	DBType:      types.DBTypeOracle,
+	Target:      oracleDriver,
+	TargetName:  "oracle",
+	ParseDBName: parseOracleServiceName,
+})
+if err != nil {
+	return err
+}
+
+db, err := sql.Open("seata-xa-oracle", dsn)
+```
+
+> Oracle XA 使用 `DBMS_XA` PL/SQL 调用，应用用户需要具备执行 `DBMS_XA` 包的权限。
+
 > MariaDB 专属配置和排查说明：[MariaDB XA 使用指南](./xa_mariadb_zh.md)。
+> Oracle 专属配置和排查说明：[Oracle XA 使用指南](./xa_oracle_zh.md)。
 
 > 完整示例可参考：[XA 模式示例](https://github.com/apache/incubator-seata-go-samples/tree/main/xa/basic)。

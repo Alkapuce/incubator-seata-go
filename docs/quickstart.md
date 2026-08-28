@@ -306,6 +306,25 @@ db, err := sql.Open(
 
 > PostgreSQL XA relies on prepared transactions. Set `max_prepared_transactions > 0` on the PostgreSQL server before using this mode.
 
+For Oracle XA, register the selected Oracle driver through the vendor adapter API, then open the registered driver name:
+
+```go
+err := seatasql.RegisterSeataXADriver("seata-xa-oracle", seatasql.SeataDriverDescriptor{
+	DBType:      types.DBTypeOracle,
+	Target:      oracleDriver,
+	TargetName:  "oracle",
+	ParseDBName: parseOracleServiceName,
+})
+if err != nil {
+	return err
+}
+
+db, err := sql.Open("seata-xa-oracle", dsn)
+```
+
+> Oracle XA uses `DBMS_XA` PL/SQL calls and requires the application user to execute the `DBMS_XA` package.
+
 > MariaDB-specific setup and troubleshooting: [MariaDB XA Guide](./xa_mariadb.md).
+> Oracle-specific setup and troubleshooting: [Oracle XA Guide](./xa_oracle.md).
 
 > Full example: [XA Example](https://github.com/apache/incubator-seata-go-samples/tree/main/xa/basic).
