@@ -75,7 +75,7 @@ type MariaDBXAConn struct {
 func (c *MariaDBXAConn) Commit(ctx context.Context, xid string, onePhase bool) error {
 	log.Infof("mariadb xa branch commit, xid %s", xid)
 
-	query := "XA COMMIT '" + xid + "'"
+	query := "XA COMMIT " + quoteMySQLXID(xid)
 	if onePhase {
 		query += " ONE PHASE"
 	}
@@ -91,7 +91,7 @@ func (c *MariaDBXAConn) Commit(ctx context.Context, xid string, onePhase bool) e
 func (c *MariaDBXAConn) End(ctx context.Context, xid string, flags int) error {
 	log.Infof("mariadb xa branch end, xid %s", xid)
 
-	query := "XA END '" + xid + "'"
+	query := "XA END " + quoteMySQLXID(xid)
 	switch flags {
 	case TMSuccess, TMFail:
 	case TMSuspend:
@@ -124,7 +124,7 @@ func (c *MariaDBXAConn) XAPrepare(ctx context.Context, xid string) error {
 	log.Infof("mariadb xa branch prepare, xid %s", xid)
 
 	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, "XA PREPARE '"+xid+"'", nil)
+	_, err := conn.ExecContext(ctx, "XA PREPARE "+quoteMySQLXID(xid), nil)
 	if err != nil {
 		log.Errorf("mariadb xa branch prepare failed, xid %s, err %v", xid, err)
 	}
@@ -173,7 +173,7 @@ func (c *MariaDBXAConn) Rollback(ctx context.Context, xid string) error {
 	log.Infof("mariadb xa branch rollback, xid %s", xid)
 
 	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, "XA ROLLBACK '"+xid+"'", nil)
+	_, err := conn.ExecContext(ctx, "XA ROLLBACK "+quoteMySQLXID(xid), nil)
 	if err != nil {
 		log.Errorf("mariadb xa branch rollback failed, xid %s, err %v", xid, err)
 	}
@@ -187,7 +187,7 @@ func (c *MariaDBXAConn) SetTransactionTimeout(duration time.Duration) bool {
 func (c *MariaDBXAConn) Start(ctx context.Context, xid string, flags int) error {
 	log.Infof("mariadb xa branch start, xid %s", xid)
 
-	query := "XA START '" + xid + "'"
+	query := "XA START " + quoteMySQLXID(xid)
 	switch flags {
 	case TMJoin:
 		query += " JOIN"

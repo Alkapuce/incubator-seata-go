@@ -110,6 +110,31 @@ func TestMariaDBXAConnLifecycleSQL(t *testing.T) {
 			run:  func(ctx context.Context, conn *MariaDBXAConn) error { return conn.Rollback(ctx, "xid") },
 			want: "XA ROLLBACK 'xid'",
 		},
+		{
+			name: "start quotes xid",
+			run:  func(ctx context.Context, conn *MariaDBXAConn) error { return conn.Start(ctx, "global'123", TMResume) },
+			want: "XA START 'global''123' RESUME",
+		},
+		{
+			name: "end quotes xid",
+			run:  func(ctx context.Context, conn *MariaDBXAConn) error { return conn.End(ctx, "global'123", TMSuspend) },
+			want: "XA END 'global''123' SUSPEND",
+		},
+		{
+			name: "prepare quotes xid",
+			run:  func(ctx context.Context, conn *MariaDBXAConn) error { return conn.XAPrepare(ctx, "global'123") },
+			want: "XA PREPARE 'global''123'",
+		},
+		{
+			name: "commit quotes xid",
+			run:  func(ctx context.Context, conn *MariaDBXAConn) error { return conn.Commit(ctx, "global'123", true) },
+			want: "XA COMMIT 'global''123' ONE PHASE",
+		},
+		{
+			name: "rollback quotes xid",
+			run:  func(ctx context.Context, conn *MariaDBXAConn) error { return conn.Rollback(ctx, "global'123") },
+			want: "XA ROLLBACK 'global''123'",
+		},
 	}
 
 	for _, tt := range tests {

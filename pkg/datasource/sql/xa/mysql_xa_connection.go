@@ -88,9 +88,7 @@ func (c *MysqlXAConn) Commit(ctx context.Context, xid string, onePhase bool) err
 
 	var sb strings.Builder
 	sb.WriteString("XA COMMIT ")
-	sb.WriteString("'")
-	sb.WriteString(xid)
-	sb.WriteString("'")
+	sb.WriteString(quoteMySQLXID(xid))
 	if onePhase {
 		sb.WriteString(" ONE PHASE")
 	}
@@ -108,9 +106,7 @@ func (c *MysqlXAConn) End(ctx context.Context, xid string, flags int) error {
 
 	var sb strings.Builder
 	sb.WriteString("XA END ")
-	sb.WriteString("'")
-	sb.WriteString(xid)
-	sb.WriteString("'")
+	sb.WriteString(quoteMySQLXID(xid))
 
 	switch flags {
 	case TMSuccess:
@@ -153,9 +149,7 @@ func (c *MysqlXAConn) XAPrepare(ctx context.Context, xid string) error {
 
 	var sb strings.Builder
 	sb.WriteString("XA PREPARE ")
-	sb.WriteString("'")
-	sb.WriteString(xid)
-	sb.WriteString("'")
+	sb.WriteString(quoteMySQLXID(xid))
 
 	conn, _ := c.Conn.(driver.ExecerContext)
 	_, err := conn.ExecContext(ctx, sb.String(), nil)
@@ -212,9 +206,7 @@ func (c *MysqlXAConn) Rollback(ctx context.Context, xid string) error {
 
 	var sb strings.Builder
 	sb.WriteString("XA ROLLBACK ")
-	sb.WriteString("'")
-	sb.WriteString(xid)
-	sb.WriteString("'")
+	sb.WriteString(quoteMySQLXID(xid))
 
 	conn, _ := c.Conn.(driver.ExecerContext)
 	_, err := conn.ExecContext(ctx, sb.String(), nil)
@@ -233,9 +225,7 @@ func (c *MysqlXAConn) Start(ctx context.Context, xid string, flags int) error {
 
 	var sb strings.Builder
 	sb.WriteString("XA START ")
-	sb.WriteString("'")
-	sb.WriteString(xid)
-	sb.WriteString("'")
+	sb.WriteString(quoteMySQLXID(xid))
 
 	switch flags {
 	case TMJoin:
@@ -256,4 +246,8 @@ func (c *MysqlXAConn) Start(ctx context.Context, xid string, flags int) error {
 		log.Errorf("xa branch start failed, xid %s, err %v", xid, err)
 	}
 	return err
+}
+
+func quoteMySQLXID(xid string) string {
+	return "'" + strings.ReplaceAll(xid, "'", "''") + "'"
 }

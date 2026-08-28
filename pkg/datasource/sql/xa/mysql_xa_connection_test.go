@@ -88,6 +88,55 @@ func TestMysqlXAConn_Commit(t *testing.T) {
 	}
 }
 
+func TestMysqlXAConn_LifecycleSQLQuotesXID(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(context.Context, *MysqlXAConn) error
+		want string
+	}{
+		{
+			name: "start",
+			run:  func(ctx context.Context, conn *MysqlXAConn) error { return conn.Start(ctx, "global'123", TMNoFlags) },
+			want: "XA START 'global''123'",
+		},
+		{
+			name: "end",
+			run:  func(ctx context.Context, conn *MysqlXAConn) error { return conn.End(ctx, "global'123", TMSuccess) },
+			want: "XA END 'global''123'",
+		},
+		{
+			name: "prepare",
+			run:  func(ctx context.Context, conn *MysqlXAConn) error { return conn.XAPrepare(ctx, "global'123") },
+			want: "XA PREPARE 'global''123'",
+		},
+		{
+			name: "commit",
+			run:  func(ctx context.Context, conn *MysqlXAConn) error { return conn.Commit(ctx, "global'123", true) },
+			want: "XA COMMIT 'global''123' ONE PHASE",
+		},
+		{
+			name: "rollback",
+			run:  func(ctx context.Context, conn *MysqlXAConn) error { return conn.Rollback(ctx, "global'123") },
+			want: "XA ROLLBACK 'global''123'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockConn := mock.NewMockTestDriverConn(ctrl)
+			mockConn.EXPECT().ExecContext(gomock.Any(), tt.want, gomock.Any()).Return(&driver.ResultNoRows, nil)
+
+			conn := &MysqlXAConn{Conn: mockConn}
+			if err := tt.run(context.Background(), conn); err != nil {
+				t.Errorf("run() error = %v", err)
+			}
+		})
+	}
+}
+
 func TestMysqlXAConn_End(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
