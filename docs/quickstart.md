@@ -324,7 +324,26 @@ db, err := sql.Open("seata-xa-oracle", dsn)
 
 > Oracle XA uses `DBMS_XA` PL/SQL calls and requires the application user to execute the `DBMS_XA` package.
 
+For the Dameng XA prototype, register the selected Dameng driver through the vendor adapter API, then open the registered driver name:
+
+```go
+err := seatasql.RegisterSeataXADriver("seata-xa-dm", seatasql.SeataDriverDescriptor{
+	DBType:      types.DBTypeDM,
+	Target:      dmDriver,
+	TargetName:  "dm",
+	ParseDBName: parseDMDBName,
+})
+if err != nil {
+	return err
+}
+
+db, err := sql.Open("seata-xa-dm", dsn)
+```
+
+> The Dameng XA path is a DBMS_XA-based prototype. Validate driver licensing, compatibility mode, recovery output, and error codes against a real Dameng database before production use.
+
 > MariaDB-specific setup and troubleshooting: [MariaDB XA Guide](./xa_mariadb.md).
 > Oracle-specific setup and troubleshooting: [Oracle XA Guide](./xa_oracle.md).
+> Dameng prototype setup and limitations: [Dameng XA Prototype Guide](./xa_dm.md).
 
 > Full example: [XA Example](https://github.com/apache/incubator-seata-go-samples/tree/main/xa/basic).

@@ -34,6 +34,7 @@
   - allow Oracle DBMS_XA lifecycle and recovery calls to fall back through prepared statements
   - add Oracle XA setup, permission, XID, recovery, and troubleshooting documentation
   - add public Seata XA driver descriptor registration for vendor database adapters
+  - add a Dameng DBMS_XA prototype resource, DB type, tests, and documentation without adding a direct Dameng driver dependency
   - [[#1130](https://github.com/apache/incubator-seata-go/issues/1130)] support MySQL multi-value INSERT in AT mode for composite and mixed primary keys
 
 ### bugfix：

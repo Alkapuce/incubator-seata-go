@@ -103,6 +103,7 @@ func TestDBTypeConstants(t *testing.T) {
 	assert.Equal(t, DBType(4), DBTypeSQLServer)
 	assert.Equal(t, DBType(5), DBTypeOracle)
 	assert.Equal(t, DBType(6), DBTypeMARIADB)
+	assert.Equal(t, DBType(7), DBTypeDM)
 }
 
 func TestParseDBType(t *testing.T) {
@@ -123,6 +124,8 @@ func TestParseDBType(t *testing.T) {
 		{"sqlserver", "sqlserver", DBTypeSQLServer},
 		{"mssql", "mssql", DBTypeSQLServer},
 		{"mariadb", "mariadb", DBTypeMARIADB},
+		{"dm", "dm", DBTypeDM},
+		{"dameng", "dameng", DBTypeDM},
 		{"unknown", "unknown", DBTypeUnknown},
 		{"empty", "", DBTypeUnknown},
 	}
@@ -386,8 +389,7 @@ func TestBranchPhaseConstants(t *testing.T) {
 }
 
 func TestIndexConstants(t *testing.T) {
-	// IndexPrimary starts from where DBType iota left off (after DBTypeMARIADB which is 6)
-	// But since there are also BranchPhase constants in between, we need to check actual values
+	// Keep IndexType values stable even when new DBType constants are added.
 	assert.Equal(t, IndexType(10), IndexPrimary)
 	assert.Equal(t, IndexType(11), IndexNormal)
 	assert.Equal(t, IndexType(12), IndexUnique)

@@ -324,7 +324,26 @@ db, err := sql.Open("seata-xa-oracle", dsn)
 
 > Oracle XA 使用 `DBMS_XA` PL/SQL 调用，应用用户需要具备执行 `DBMS_XA` 包的权限。
 
+如果使用达梦 XA 原型，先通过厂商 adapter API 注册选定的达梦 driver，再打开注册后的 driver 名称：
+
+```go
+err := seatasql.RegisterSeataXADriver("seata-xa-dm", seatasql.SeataDriverDescriptor{
+	DBType:      types.DBTypeDM,
+	Target:      dmDriver,
+	TargetName:  "dm",
+	ParseDBName: parseDMDBName,
+})
+if err != nil {
+	return err
+}
+
+db, err := sql.Open("seata-xa-dm", dsn)
+```
+
+> 达梦 XA 路径是基于 DBMS_XA 的原型。正式使用前，需要在真实达梦数据库上验证 driver 许可证、兼容模式、recover 输出和错误码。
+
 > MariaDB 专属配置和排查说明：[MariaDB XA 使用指南](./xa_mariadb_zh.md)。
 > Oracle 专属配置和排查说明：[Oracle XA 使用指南](./xa_oracle_zh.md)。
+> 达梦原型配置和限制说明：[达梦 XA 原型使用指南](./xa_dm_zh.md)。
 
 > 完整示例可参考：[XA 模式示例](https://github.com/apache/incubator-seata-go-samples/tree/main/xa/basic)。

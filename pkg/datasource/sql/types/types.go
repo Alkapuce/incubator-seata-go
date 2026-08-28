@@ -77,19 +77,20 @@ const (
 	DBTypeSQLServer
 	DBTypeOracle
 	DBTypeMARIADB
+	DBTypeDM
 
 	BranchPhase_Unknown = 0
 	BranchPhase_Done    = 1
 	BranchPhase_Failed  = 2
 
 	// IndexPrimary primary index type.
-	IndexPrimary IndexType = iota
+	IndexPrimary IndexType = 10
 	// IndexNormal normal index type.
-	IndexNormal
+	IndexNormal IndexType = 11
 	// IndexUnique unique index type.
-	IndexUnique
+	IndexUnique IndexType = 12
 	// IndexFullText full text index type.
-	IndexFullText
+	IndexFullText IndexType = 13
 )
 
 func ParseDBType(driverName string) DBType {
@@ -104,6 +105,8 @@ func ParseDBType(driverName string) DBType {
 		return DBTypeSQLServer
 	case "mariadb":
 		return DBTypeMARIADB
+	case "dm", "dameng":
+		return DBTypeDM
 	default:
 		return DBTypeUnknown
 	}

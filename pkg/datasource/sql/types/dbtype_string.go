@@ -31,11 +31,12 @@ func _() {
 	_ = x[DBTypeSQLServer-4]
 	_ = x[DBTypeOracle-5]
 	_ = x[DBTypeMARIADB-6]
+	_ = x[DBTypeDM-7]
 }
 
-const _DBType_name = "DBTypeUnknownDBTypeMySQLDBTypePostgreSQLDBTypeSQLServerDBTypeOracleDBTypeMARIADB"
+const _DBType_name = "DBTypeUnknownDBTypeMySQLDBTypePostgreSQLDBTypeSQLServerDBTypeOracleDBTypeMARIADBDBTypeDM"
 
-var _DBType_index = [...]uint8{0, 13, 24, 40, 55, 67, 80}
+var _DBType_index = [...]uint8{0, 13, 24, 40, 55, 67, 80, 88}
 
 func (i DBType) String() string {
 	i -= 1

@@ -35,6 +35,7 @@ Seata-go 是一款开源的分布式事务解决方案，提供高性能和简�
 - 支持 Oracle DBMS_XA 生命周期和恢复调用通过 prepared statement 路径回退执行
 - 新增 Oracle XA 配置、权限、XID、恢复和故障排查文档
 - 新增公开的 Seata XA driver descriptor 注册入口，用于厂商数据库适配
+- 新增不直接引入达梦 driver 依赖的达梦 DBMS_XA 原型 resource、DBType、测试和文档
 - [[#1130](https://github.com/apache/incubator-seata-go/issues/1130)] 支持 AT 模式下 MySQL 多值 INSERT 的复合主键与混合主键场景
 
 ### bugfix：
