@@ -64,14 +64,16 @@ func (f *rmBranchCommitProcessor) handleGrpcBranchCommit(ctx context.Context, rp
 	resourceID := request.AbstractBranchEndRequest.ResourceId
 	applicationData := request.AbstractBranchEndRequest.ApplicationData
 	log.Infof("Branch committing: xid %s, branchID %d, resourceID %s, applicationData %s", xid, branchID, resourceID, applicationData)
+	branchType := branch.BranchType(request.AbstractBranchEndRequest.BranchType)
 	branchResource := rm.BranchResource{
+		BranchType:      branchType,
 		ResourceId:      resourceID,
 		BranchId:        branchID,
 		ApplicationData: []byte(applicationData),
 		Xid:             xid,
 	}
 
-	status, err := rm.GetRmCacheInstance().GetResourceManager(branch.BranchType(request.AbstractBranchEndRequest.BranchType)).BranchCommit(ctx, branchResource)
+	status, err := rm.GetRmCacheInstance().GetResourceManager(branchType).BranchCommit(ctx, branchResource)
 	if err != nil {
 		log.Errorf("branch commit error: %s", err.Error())
 		return err
