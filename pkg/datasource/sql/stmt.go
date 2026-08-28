@@ -27,11 +27,12 @@ import (
 )
 
 type Stmt struct {
-	conn  *Conn
-	res   *DBResource
-	txCtx *types.TransactionContext
-	query string
-	stmt  driver.Stmt
+	conn   *Conn
+	res    *DBResource
+	txCtx  *types.TransactionContext
+	query  string
+	stmt   driver.Stmt
+	xaConn *XAConn
 }
 
 // Close closes the statement.
@@ -96,22 +97,41 @@ func (s *Stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driv
 		return nil, driver.ErrSkip
 	}
 
-	executor, err := exec.BuildExecutor(s.res.dbType, s.txCtx.TransactionMode, s.query)
-	if err != nil {
-		return nil, err
+	run := func() (types.ExecResult, error) {
+		txCtx := s.activeTxContext()
+		executor, err := exec.BuildExecutor(s.res.dbType, txCtx.TransactionMode, s.query)
+		if err != nil {
+			return nil, err
+		}
+
+		execCtx := s.conn.newExecContext(txCtx, s.query, nil, args)
+
+		return executor.ExecWithNamedValue(ctx, execCtx,
+			func(ctx context.Context, query string, args []driver.NamedValue) (types.ExecResult, error) {
+				ret, err := stmt.QueryContext(ctx, args)
+				if err != nil {
+					return nil, err
+				}
+
+				return types.NewResult(types.WithRows(ret)), nil
+			})
 	}
 
-	execCtx := s.conn.newExecContext(s.txCtx, s.query, nil, args)
+	var (
+		ret types.ExecResult
+		err error
+	)
+	if s.xaConn != nil {
+		if s.xaConn.createOnceTxContext(ctx) {
+			defer func() {
+				s.xaConn.txCtx = types.NewTxCtx()
+			}()
+		}
+		ret, err = s.xaConn.createNewTxOnExecIfNeed(ctx, true, s.query, args, run)
+	} else {
+		ret, err = run()
+	}
 
-	ret, err := executor.ExecWithNamedValue(ctx, execCtx,
-		func(ctx context.Context, query string, args []driver.NamedValue) (types.ExecResult, error) {
-			ret, err := stmt.QueryContext(ctx, args)
-			if err != nil {
-				return nil, err
-			}
-
-			return types.NewResult(types.WithRows(ret)), nil
-		})
 	if err != nil {
 		return nil, err
 	}
@@ -155,26 +175,54 @@ func (s *Stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (drive
 		return nil, driver.ErrSkip
 	}
 
-	// in transaction, need run Executor
-	executor, err := exec.BuildExecutor(s.res.dbType, s.txCtx.TransactionMode, s.query)
-	if err != nil {
-		return nil, err
+	run := func() (types.ExecResult, error) {
+		txCtx := s.activeTxContext()
+		executor, err := exec.BuildExecutor(s.res.dbType, txCtx.TransactionMode, s.query)
+		if err != nil {
+			return nil, err
+		}
+
+		execCtx := s.conn.newExecContext(txCtx, s.query, nil, args)
+
+		return executor.ExecWithNamedValue(ctx, execCtx,
+			func(ctx context.Context, query string, args []driver.NamedValue) (types.ExecResult, error) {
+				ret, err := stmt.ExecContext(ctx, args)
+				if err != nil {
+					return nil, err
+				}
+
+				return types.NewResult(types.WithResult(ret)), nil
+			})
 	}
 
-	execCtx := s.conn.newExecContext(s.txCtx, s.query, nil, args)
+	var (
+		ret types.ExecResult
+		err error
+	)
+	if s.xaConn != nil {
+		if s.xaConn.createOnceTxContext(ctx) {
+			defer func() {
+				s.xaConn.txCtx = types.NewTxCtx()
+			}()
+		}
+		ret, err = s.xaConn.createNewTxOnExecIfNeed(ctx, false, s.query, args, run)
+	} else {
+		ret, err = run()
+	}
 
-	ret, err := executor.ExecWithNamedValue(ctx, execCtx,
-		func(ctx context.Context, query string, args []driver.NamedValue) (types.ExecResult, error) {
-			ret, err := stmt.ExecContext(ctx, args)
-			if err != nil {
-				return nil, err
-			}
-
-			return types.NewResult(types.WithResult(ret)), nil
-		})
 	if err != nil {
 		return nil, err
 	}
 
 	return ret.GetResult(), err
+}
+
+func (s *Stmt) activeTxContext() *types.TransactionContext {
+	if s.xaConn != nil && s.xaConn.txCtx != nil {
+		return s.xaConn.txCtx
+	}
+	if s.txCtx == nil {
+		return types.NewTxCtx()
+	}
+	return s.txCtx
 }

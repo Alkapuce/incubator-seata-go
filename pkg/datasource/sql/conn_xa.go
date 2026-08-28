@@ -74,15 +74,14 @@ func (c *XAConn) PrepareContext(ctx context.Context, query string) (driver.Stmt,
 		}()
 	}
 
-	//ret, err := c.createNewTxOnExecIfNeed(ctx, func() (types, error) {
-	//	ret, err := c.Conn.PrepareContext(ctx, query)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	return types.NewResult(types.WithRows(ret)), nil
-	//})
-
-	return c.Conn.PrepareContext(ctx, query)
+	stmt, err := c.Conn.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if seataStmt, ok := stmt.(*Stmt); ok {
+		seataStmt.xaConn = c
+	}
+	return stmt, nil
 }
 
 // QueryContext exec xa sql

@@ -1246,9 +1246,11 @@ func TestXAConn_ExecContext_AutoCommitReportsPhaseOneDone(t *testing.T) {
 func TestXAConn_ExecContext_MariaDBAutoCommitUsesMariaDBXAResource(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	exec.CleanCommonHook()
 	CleanTxHooks()
 	defer func() {
 		simulateExecContextError = nil
+		exec.CleanCommonHook()
 		CleanTxHooks()
 	}()
 
@@ -1448,9 +1450,11 @@ func TestXAConn_ExecContext_ReuseAfterAutoCommitBranch(t *testing.T) {
 func TestXAConn_QueryContext_DefersBranchCommitUntilRowsClose(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	exec.CleanCommonHook()
 	CleanTxHooks()
 	defer func() {
 		simulateExecContextError = nil
+		exec.CleanCommonHook()
 		CleanTxHooks()
 	}()
 
@@ -1641,6 +1645,128 @@ func TestXAConn_AutoCommit_ParameterizedStmtErrSkipFallsBackInBranch(t *testing.
 	assert.NoError(t, err, "parameterized UPDATE should complete via the in-branch Prepare+Exec fallback")
 	assert.Equal(t, int32(1), atomic.LoadInt32(&reportCnt),
 		"the branch prepares and reports phase-1 success after the in-branch fallback")
+}
+
+func TestXAConn_PreparedExecContext_AutoCommitCompletesXABranch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	exec.CleanCommonHook()
+	CleanTxHooks()
+	defer func() {
+		simulateExecContextError = nil
+		exec.CleanCommonHook()
+		CleanTxHooks()
+	}()
+
+	prevTimeout := xaConnTimeout
+	xaConnTimeout = time.Minute
+	defer func() { xaConnTimeout = prevTimeout }()
+
+	xaConn, mockMgr := newMockXAConn(t, ctrl, 123)
+
+	var reportCnt int32
+	mockMgr.EXPECT().BranchReport(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, param rm.BranchReportParam) error {
+			assert.EqualValues(t, branch.BranchStatusPhaseoneDone, param.Status)
+			atomic.AddInt32(&reportCnt, 1)
+			return nil
+		}).Times(1)
+
+	var startCnt, endCnt, prepareCnt int32
+	simulateExecContextError = func(query string) error {
+		upper := strings.ToUpper(strings.TrimSpace(query))
+		switch {
+		case strings.HasPrefix(upper, "XA START"):
+			atomic.AddInt32(&startCnt, 1)
+		case strings.HasPrefix(upper, "XA END"):
+			atomic.AddInt32(&endCnt, 1)
+		case strings.HasPrefix(upper, "XA PREPARE"):
+			atomic.AddInt32(&prepareCnt, 1)
+		}
+		return nil
+	}
+
+	ctx := tm.InitSeataContext(context.Background())
+	tm.SetXID(ctx, uuid.NewString())
+
+	stmt, err := xaConn.PrepareContext(ctx, "UPDATE user SET age = age + 1 WHERE id = ?")
+	assert.NoError(t, err)
+	defer stmt.Close()
+
+	execer, ok := stmt.(driver.StmtExecContext)
+	assert.True(t, ok)
+
+	_, err = execer.ExecContext(ctx, []driver.NamedValue{{Ordinal: 1, Value: int64(1)}})
+	assert.NoError(t, err)
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&startCnt), "prepared ExecContext must start one XA branch")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&endCnt), "prepared ExecContext must end one XA branch")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&prepareCnt), "prepared ExecContext must prepare one XA branch")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&reportCnt), "prepared ExecContext must report phase-1 done")
+	assert.False(t, xaConn.xaActive, "prepared autoCommit exec must leave no active XA branch")
+}
+
+func TestXAConn_PreparedQueryContext_AutoCommitDefersBranchCommitUntilRowsClose(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	exec.CleanCommonHook()
+	CleanTxHooks()
+	defer func() {
+		simulateExecContextError = nil
+		exec.CleanCommonHook()
+		CleanTxHooks()
+	}()
+
+	prevTimeout := xaConnTimeout
+	xaConnTimeout = time.Minute
+	defer func() { xaConnTimeout = prevTimeout }()
+
+	xaConn, mockMgr := newMockXAConn(t, ctrl, 123)
+
+	var reportCnt int32
+	mockMgr.EXPECT().BranchReport(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, param rm.BranchReportParam) error {
+			assert.EqualValues(t, branch.BranchStatusPhaseoneDone, param.Status)
+			atomic.AddInt32(&reportCnt, 1)
+			return nil
+		}).Times(1)
+
+	var endCnt, prepareCnt int32
+	simulateExecContextError = func(query string) error {
+		upper := strings.ToUpper(strings.TrimSpace(query))
+		switch {
+		case strings.HasPrefix(upper, "XA END"):
+			atomic.AddInt32(&endCnt, 1)
+		case strings.HasPrefix(upper, "XA PREPARE"):
+			atomic.AddInt32(&prepareCnt, 1)
+		}
+		return nil
+	}
+
+	ctx := tm.InitSeataContext(context.Background())
+	tm.SetXID(ctx, uuid.NewString())
+
+	stmt, err := xaConn.PrepareContext(ctx, "SELECT * FROM user WHERE id = ? FOR UPDATE")
+	assert.NoError(t, err)
+	defer stmt.Close()
+
+	queryer, ok := stmt.(driver.StmtQueryContext)
+	assert.True(t, ok)
+
+	rows, err := queryer.QueryContext(ctx, []driver.NamedValue{{Ordinal: 1, Value: int64(1)}})
+	assert.NoError(t, err)
+
+	_, ok = rows.(*RowsCommitOnClose)
+	assert.True(t, ok, "prepared XA query rows must defer branch commit until rows close")
+	assert.Equal(t, int32(0), atomic.LoadInt32(&endCnt), "XA END must wait for prepared query rows close")
+	assert.Equal(t, int32(0), atomic.LoadInt32(&prepareCnt), "XA PREPARE must wait for prepared query rows close")
+	assert.Equal(t, int32(0), atomic.LoadInt32(&reportCnt), "phase-1 report must wait for prepared query rows close")
+
+	assert.NoError(t, rows.Close())
+	assert.Equal(t, int32(1), atomic.LoadInt32(&endCnt), "XA END runs when prepared query rows close")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&prepareCnt), "XA PREPARE runs when prepared query rows close")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&reportCnt), "phase-1 report runs when prepared query rows close")
+	assert.False(t, xaConn.xaActive, "prepared autoCommit query must leave no active XA branch after rows close")
 }
 
 // The real #904 scenario is a PARAMETERIZED `SELECT ... FOR UPDATE WHERE id = ?`
