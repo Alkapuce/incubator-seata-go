@@ -23,7 +23,7 @@
 
 | 范围 | 状态 |
 | --- | --- |
-| MariaDB | 新增 `seata-xa-mariadb`、MariaDB XA resource factory、MySQL-compatible XA 生命周期语句、recover 解析、MariaDB 专属错误分类、单元测试、集成测试和用户文档。 |
+| MariaDB | 新增 `seata-xa-mariadb`、MariaDB XA resource factory、MySQL-compatible XA 生命周期语句、recover 解析、MariaDB 专属错误分类、XAConn autoCommit 覆盖、集成测试和用户文档。 |
 | Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、recover 解析、prepared statement fallback、already-ended 错误分类、单元测试和配置/排查文档。 |
 | 厂商 adapter | 新增 `RegisterSeataXADriver` 和 `SeataDriverDescriptor`，应用可以注册外部 `database/sql/driver.Driver`，无需把厂商 driver 加入 Seata Go 直接依赖。 |
 | 达梦原型 | 新增 `types.DBTypeDM` 和基于 `DBMS_XA` 的 XA resource 原型，覆盖 XID 映射、生命周期调用、recover 解析、错误分类、单元测试和文档。 |
@@ -37,6 +37,7 @@
 git diff --check
 go test ./pkg/datasource/sql/types -run 'DBType|ParseDBType|IndexConstants' -v
 go test ./pkg/datasource/sql/xa -run 'MariaDB|Oracle|DM' -v
+go test ./pkg/datasource/sql -run 'TestXAConn_ExecContext|TestXAConn_AutoCommit' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
 go test ./pkg/datasource/sql/...
 go test ./...

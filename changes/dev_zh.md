@@ -30,6 +30,7 @@ Seata-go 是一款开源的分布式事务解决方案，提供高性能和简�
 - 支持全局事务中 autoCommit 语句的 XA 分支注册：每条 autoCommit 语句都作为一个完整的 XA 分支单独注册并 prepare（注意：N 条 autoCommit 语句会在 TC 侧产生 N 个分支）；带参数的语句（默认 go-sql-driver DSN 会返回 `driver.ErrSkip`）通过分支内 Prepare+Exec 回退执行，从而保证仍在分支内完成
 - 支持基于 pgx 驱动的 PostgreSQL XA
 - 支持 MariaDB XA resource factory、driver 注册、生命周期语句、恢复扫描和 MariaDB 专属错误分类
+- 新增 XAConn autoCommit 回归测试，覆盖 MariaDB XA resource 选择和一阶段上报
 - 新增 MariaDB XA 重复二阶段回调集成测试覆盖
 - 新增 Oracle DBMS_XA XID 映射、PL/SQL 生命周期 helper、恢复扫描解析和 already-ended 错误分类
 - 将包装后的 Oracle DBMS_XA 数字 XAER_NOTA 返回码识别为 already-ended 错误

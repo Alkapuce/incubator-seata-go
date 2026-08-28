@@ -23,7 +23,7 @@ This document summarizes the local delivery scope for XA multi-database support 
 
 | Area | Status |
 | --- | --- |
-| MariaDB | Adds `seata-xa-mariadb`, a MariaDB XA resource factory, MySQL-compatible XA lifecycle statements, recovery parsing, MariaDB-specific error classification, unit tests, an integration test, and user documentation. |
+| MariaDB | Adds `seata-xa-mariadb`, a MariaDB XA resource factory, MySQL-compatible XA lifecycle statements, recovery parsing, MariaDB-specific error classification, XAConn autoCommit coverage, integration tests, and user documentation. |
 | Oracle | Adds Oracle `DBMS_XA` XID mapping, lifecycle calls, recovery parsing, prepared-statement fallback, already-ended error classification, unit tests, and setup/troubleshooting documentation. |
 | Vendor adapters | Adds `RegisterSeataXADriver` and `SeataDriverDescriptor` so applications can register vendor `database/sql/driver.Driver` implementations without adding them as Seata Go dependencies. |
 | Dameng prototype | Adds `types.DBTypeDM` and a `DBMS_XA`-based XA resource prototype with XID mapping, lifecycle calls, recovery parsing, error classification, unit tests, and documentation. |
@@ -37,6 +37,7 @@ Run the following checks before sending or updating the pull requests:
 git diff --check
 go test ./pkg/datasource/sql/types -run 'DBType|ParseDBType|IndexConstants' -v
 go test ./pkg/datasource/sql/xa -run 'MariaDB|Oracle|DM' -v
+go test ./pkg/datasource/sql -run 'TestXAConn_ExecContext|TestXAConn_AutoCommit' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
 go test ./pkg/datasource/sql/...
 go test ./...

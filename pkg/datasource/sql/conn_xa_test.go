@@ -237,12 +237,23 @@ func initXAConnTestResource(t *testing.T) (*gomock.Controller, *sql.DB, *mockSQL
 }
 
 func newMockXAConn(t *testing.T, ctrl *gomock.Controller, branchID int64) (*XAConn, *mock.MockDataSourceManager) {
+	return newMockXAConnForDBType(t, ctrl, branchID, types.DBTypeMySQL, "jdbc:mysql://test/resource")
+}
+
+func newMockXAConnForDBType(t *testing.T, ctrl *gomock.Controller, branchID int64, dbType types.DBType, resourceID string, registerAssertions ...func(rm.BranchRegisterParam)) (*XAConn, *mock.MockDataSourceManager) {
 	t.Helper()
 
 	mockMgr := mock.NewMockDataSourceManager(ctrl)
 	mockMgr.SetBranchType(branch.BranchTypeXA)
 	registerResourceManagerForTest(t, mockMgr)
-	mockMgr.EXPECT().BranchRegister(gomock.Any(), gomock.Any()).AnyTimes().Return(branchID, nil)
+	mockMgr.EXPECT().BranchRegister(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, param rm.BranchRegisterParam) (int64, error) {
+			for _, assertRegister := range registerAssertions {
+				assertRegister(param)
+			}
+			return branchID, nil
+		},
+	)
 
 	mockConn := mock.NewMockTestDriverConn(ctrl)
 	baseMockConn(mockConn)
@@ -250,13 +261,13 @@ func newMockXAConn(t *testing.T, ctrl *gomock.Controller, branchID int64) (*XACo
 	return &XAConn{
 		Conn: &Conn{
 			res: &DBResource{
-				resourceID: "jdbc:mysql://test/resource",
-				dbType:     types.DBTypeMySQL,
+				resourceID: resourceID,
+				dbType:     dbType,
 			},
 			txCtx:      types.NewTxCtx(),
 			targetConn: mockConn,
 			autoCommit: true,
-			dbType:     types.DBTypeMySQL,
+			dbType:     dbType,
 		},
 	}, mockMgr
 }
@@ -595,6 +606,62 @@ func TestXAConn_ExecContext_AutoCommitReportsPhaseOneDone(t *testing.T) {
 	_, err := xaConn.ExecContext(ctx, "SELECT 1", nil)
 	assert.NoError(t, err)
 	assert.Equal(t, int32(1), atomic.LoadInt32(&commitCnt))
+}
+
+func TestXAConn_ExecContext_MariaDBAutoCommitUsesMariaDBXAResource(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	CleanTxHooks()
+	defer func() {
+		simulateExecContextError = nil
+		CleanTxHooks()
+	}()
+
+	prevTimeout := xaConnTimeout
+	xaConnTimeout = time.Minute
+	defer func() { xaConnTimeout = prevTimeout }()
+
+	const resourceID = "jdbc:mariadb://test/resource"
+	xaConn, mockMgr := newMockXAConnForDBType(t, ctrl, 321, types.DBTypeMARIADB, resourceID,
+		func(param rm.BranchRegisterParam) {
+			assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+			assert.Equal(t, resourceID, param.ResourceId)
+			assert.NotEmpty(t, param.Xid)
+		},
+	)
+	mockMgr.EXPECT().BranchReport(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, param rm.BranchReportParam) error {
+			assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+			assert.Equal(t, int64(321), param.BranchId)
+			assert.EqualValues(t, branch.BranchStatusPhaseoneDone, param.Status)
+			return nil
+		},
+	).Times(1)
+
+	var startCnt, endCnt, prepareCnt int32
+	simulateExecContextError = func(query string) error {
+		upper := strings.ToUpper(strings.TrimSpace(query))
+		switch {
+		case strings.HasPrefix(upper, "XA START"):
+			atomic.AddInt32(&startCnt, 1)
+		case strings.HasPrefix(upper, "XA END"):
+			atomic.AddInt32(&endCnt, 1)
+		case strings.HasPrefix(upper, "XA PREPARE"):
+			atomic.AddInt32(&prepareCnt, 1)
+		}
+		return nil
+	}
+
+	ctx := tm.InitSeataContext(context.Background())
+	tm.SetXID(ctx, uuid.NewString())
+
+	_, err := xaConn.ExecContext(ctx, "UPDATE account SET balance = balance - 1 WHERE id = 1", nil)
+	assert.NoError(t, err)
+	assert.IsType(t, &xa.MariaDBXAConn{}, xaConn.xaResource)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&startCnt))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&endCnt))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&prepareCnt))
+	assert.False(t, xaConn.xaActive, "MariaDB autoCommit branch must leave no active XA branch")
 }
 
 // Regression for the autoCommit branch-reuse bug: after a statement's XA branch
