@@ -345,5 +345,6 @@ db, err := sql.Open("seata-xa-dm", dsn)
 > MariaDB-specific setup and troubleshooting: [MariaDB XA Guide](./xa_mariadb.md).
 > Oracle-specific setup and troubleshooting: [Oracle XA Guide](./xa_oracle.md).
 > Dameng prototype setup and limitations: [Dameng XA Prototype Guide](./xa_dm.md).
+> Multi-database delivery and validation notes: [XA Multi-Database Delivery Notes](./xa_multi_db_delivery.md).
 
 > Full example: [XA Example](https://github.com/apache/incubator-seata-go-samples/tree/main/xa/basic).

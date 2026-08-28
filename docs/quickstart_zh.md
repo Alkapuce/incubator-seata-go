@@ -345,5 +345,6 @@ db, err := sql.Open("seata-xa-dm", dsn)
 > MariaDB 专属配置和排查说明：[MariaDB XA 使用指南](./xa_mariadb_zh.md)。
 > Oracle 专属配置和排查说明：[Oracle XA 使用指南](./xa_oracle_zh.md)。
 > 达梦原型配置和限制说明：[达梦 XA 原型使用指南](./xa_dm_zh.md)。
+> 多数据库交付和验证说明：[XA 多数据库交付说明](./xa_multi_db_delivery_zh.md)。
 
 > 完整示例可参考：[XA 模式示例](https://github.com/apache/incubator-seata-go-samples/tree/main/xa/basic)。
