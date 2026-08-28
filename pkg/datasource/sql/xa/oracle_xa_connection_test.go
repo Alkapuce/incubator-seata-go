@@ -148,6 +148,31 @@ func TestOracleXAPrepareAcceptsReadonly(t *testing.T) {
 	assert.Contains(t, block, "IF l_result NOT IN (DBMS_XA.XA_OK, DBMS_XA.XA_RDONLY) THEN")
 }
 
+func TestOracleXAExecFallsBackToPrepare(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockStmt := mock.NewMockTestDriverStmt(ctrl)
+	mockConn.EXPECT().ExecContext(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, driver.ErrSkip)
+	mockConn.EXPECT().PrepareContext(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, query string) (driver.Stmt, error) {
+			assert.Contains(t, query, "DBMS_XA.XA_PREPARE(l_xid)")
+			return mockStmt, nil
+		})
+	mockStmt.EXPECT().ExecContext(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+			assert.Equal(t, int64(oracleXAFormatID), argByName(t, args, "format_id").Value)
+			assert.Equal(t, "676C6F62616C", argByName(t, args, "gtrid_hex").Value)
+			assert.Equal(t, "2D313233", argByName(t, args, "bqual_hex").Value)
+			return &driver.ResultNoRows, nil
+		})
+	mockStmt.EXPECT().Close().Return(nil)
+
+	conn := &OracleXAConn{Conn: mockConn}
+	assert.NoError(t, conn.XAPrepare(context.Background(), "global-123"))
+}
+
 func TestOracleXAConnRejectsInvalidFlags(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -173,6 +198,26 @@ func TestOracleXAConnRecover(t *testing.T) {
 	got, err := conn.Recover(context.Background(), TMStartRScan|TMEndRScan)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"global-123", "another-456"}, got)
+}
+
+func TestOracleXARecoverFallsBackToPrepare(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockStmt := mock.NewMockTestDriverStmt(ctrl)
+	mockRows := &oracleMockRows{
+		data: [][]interface{}{{int64(oracleXAFormatID), "676C6F62616C", "2D313233"}},
+	}
+	mockConn.EXPECT().QueryContext(gomock.Any(), oracleXARecoverQuery, gomock.Any()).Return(nil, driver.ErrSkip)
+	mockConn.EXPECT().PrepareContext(gomock.Any(), oracleXARecoverQuery).Return(mockStmt, nil)
+	mockStmt.EXPECT().QueryContext(gomock.Any(), gomock.Any()).Return(mockRows, nil)
+	mockStmt.EXPECT().Close().Return(nil)
+
+	conn := &OracleXAConn{Conn: mockConn}
+	got, err := conn.Recover(context.Background(), TMStartRScan)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"global-123"}, got)
 }
 
 func TestOracleXAConnRecoverFlags(t *testing.T) {

@@ -75,10 +75,10 @@ It does not silently hash or truncate oversized XIDs.
 
 ## Requirements
 
-- Use an Oracle driver that implements `database/sql/driver.ExecerContext` for
-  lifecycle calls.
-- Use an Oracle driver that implements `database/sql/driver.QueryerContext` for
-  recovery scans.
+- Use an Oracle driver that can execute PL/SQL blocks through `ExecerContext` or
+  `PrepareContext` plus `StmtExecContext`.
+- Use an Oracle driver that can run recovery queries through `QueryerContext` or
+  `PrepareContext` plus `StmtQueryContext`.
 - Grant the application user permission to execute the `DBMS_XA` package.
 - Confirm that the application can call `DBMS_XA.XA_RECOVER()` or has an
   equivalent recovery path before enabling production traffic.
@@ -135,8 +135,8 @@ Oracle validation must record:
 
 | Symptom | Check |
 | --- | --- |
-| `oracle xa requires driver.ExecerContext` | The selected Oracle driver cannot execute the DBMS_XA PL/SQL lifecycle blocks through `driver.ExecerContext`. |
-| `oracle xa recover requires driver.QueryerContext` | The selected Oracle driver cannot run the recovery query through `driver.QueryerContext`. |
+| `sql: driver does not support the use of Named Parameters` | The selected Oracle driver fell back to legacy statement execution and cannot bind the named parameters required by the DBMS_XA PL/SQL block. |
+| Prepare or statement execution fails during DBMS_XA calls | Confirm that the selected Oracle driver supports PL/SQL blocks with named binds either through connection-level context methods or statement-level context methods. |
 | `ORA-01031: insufficient privileges` | Grant access to `DBMS_XA` or run validation with a user that has the required package privileges. |
 | `oracle xa gtrid exceeds RAW(64)` or `oracle xa bqual exceeds RAW(64)` | Shorten the global XID or use a future mapping strategy approved by the project. |
 | Recovery returns an invalid branch qualifier | Confirm that all participating applications use the same Seata XID mapping and `formatid=9752`. |

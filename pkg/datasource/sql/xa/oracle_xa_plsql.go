@@ -25,6 +25,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"seata.apache.org/seata-go/v2/pkg/datasource/sql/util"
 )
 
 const oracleXATransLoose = 0x00010000
@@ -32,11 +34,6 @@ const oracleXATransLoose = 0x00010000
 const oracleXARecoverQuery = "SELECT x.formatid, RAWTOHEX(x.gtrid), RAWTOHEX(x.bqual) FROM TABLE(DBMS_XA.XA_RECOVER()) x"
 
 func execOracleXA(ctx context.Context, conn driver.Conn, functionName, branchXID, callArgs string, extraArgs []driver.NamedValue, allowedReturns []string) error {
-	execer, ok := conn.(driver.ExecerContext)
-	if !ok {
-		return fmt.Errorf("oracle xa requires driver.ExecerContext, got %T", conn)
-	}
-
 	xid, err := newOracleXID(branchXID)
 	if err != nil {
 		return err
@@ -49,7 +46,7 @@ func execOracleXA(ctx context.Context, conn driver.Conn, functionName, branchXID
 	}
 	args = append(args, extraArgs...)
 
-	_, err = execer.ExecContext(ctx, buildOracleXABlock(functionName, callArgs, allowedReturns), args)
+	_, err = util.CtxDriverExecWithPrepareFallback(ctx, conn, buildOracleXABlock(functionName, callArgs, allowedReturns), args)
 	return err
 }
 
@@ -66,12 +63,7 @@ END;`, functionName, callArgs, strings.Join(allowedReturns, ", "), functionName)
 }
 
 func recoverOracleXA(ctx context.Context, conn driver.Conn) ([]string, error) {
-	queryer, ok := conn.(driver.QueryerContext)
-	if !ok {
-		return nil, fmt.Errorf("oracle xa recover requires driver.QueryerContext, got %T", conn)
-	}
-
-	rows, err := queryer.QueryContext(ctx, oracleXARecoverQuery, nil)
+	rows, err := util.CtxDriverQueryWithPrepareFallback(ctx, conn, oracleXARecoverQuery, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -72,8 +72,8 @@ Seata Go 会拒绝无法从 Oracle recover 结果反解的 XID，不会静默 ha
 
 ## 使用要求
 
-- Oracle driver 需要实现 `database/sql/driver.ExecerContext`，用于执行生命周期 PL/SQL block。
-- Oracle driver 需要实现 `database/sql/driver.QueryerContext`，用于执行恢复扫描。
+- Oracle driver 需要能通过 `ExecerContext`，或 `PrepareContext` 加 `StmtExecContext` 执行 PL/SQL block。
+- Oracle driver 需要能通过 `QueryerContext`，或 `PrepareContext` 加 `StmtQueryContext` 执行恢复扫描。
 - 应用用户需要具备执行 `DBMS_XA` 包的权限。
 - 正式使用前，应确认应用能调用 `DBMS_XA.XA_RECOVER()`，或具备等价恢复路径。
 - 验证失败后要确保 prepared branch 可见并被清理。
@@ -124,8 +124,8 @@ go test ./pkg/datasource/sql/...
 
 | 现象 | 检查项 |
 | --- | --- |
-| `oracle xa requires driver.ExecerContext` | 当前 Oracle driver 不能通过 `driver.ExecerContext` 执行 DBMS_XA 生命周期 PL/SQL block。 |
-| `oracle xa recover requires driver.QueryerContext` | 当前 Oracle driver 不能通过 `driver.QueryerContext` 执行恢复查询。 |
+| `sql: driver does not support the use of Named Parameters` | 当前 Oracle driver 回退到旧式 statement 执行路径，无法绑定 DBMS_XA PL/SQL block 需要的命名参数。 |
+| DBMS_XA 调用在 Prepare 或 statement 执行阶段失败 | 确认当前 Oracle driver 能通过连接级 context 方法或 statement 级 context 方法执行带命名绑定的 PL/SQL block。 |
 | `ORA-01031: insufficient privileges` | 授权应用用户访问 `DBMS_XA`，或使用具备对应 package 权限的用户验证。 |
 | `oracle xa gtrid exceeds RAW(64)` 或 `oracle xa bqual exceeds RAW(64)` | 缩短全局 XID，或等待项目接受新的 XID 映射策略。 |
 | recover 返回的 branch qualifier 无法解析 | 确认所有参与应用使用相同的 Seata XID 映射和 `formatid=9752`。 |
