@@ -24,9 +24,9 @@
 | 范围 | 状态 |
 | --- | --- |
 | MariaDB | 新增 `seata-xa-mariadb`、MariaDB XA resource factory、MySQL-compatible XA 生命周期语句、recover 解析、MariaDB 专属错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、集成测试和用户文档。 |
-| Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、recover 解析、prepared statement fallback、already-ended 错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和配置/排查文档。 |
+| Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析、prepared statement fallback、already-ended 错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和配置/排查文档。 |
 | 厂商 adapter | 新增 `RegisterSeataXADriver` 和 `SeataDriverDescriptor`，应用可以注册外部 `database/sql/driver.Driver`，无需把厂商 driver 加入 Seata Go 直接依赖。 |
-| 达梦原型 | 新增 `types.DBTypeDM` 和基于 `DBMS_XA` 的 XA resource 原型，覆盖 XID 映射、生命周期调用、recover 解析、错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和文档。 |
+| 达梦原型 | 新增 `types.DBTypeDM` 和基于 `DBMS_XA` 的 XA resource 原型，覆盖 XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析、错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和文档。 |
 | Kingbase 与 Oscar | 已记录扩展方向和待确认问题。Kingbase 优先按 PostgreSQL prepared transaction 路径验证；Oscar 需要先确认公开 Go driver、XA API、recover 和错误码。 |
 
 ## 验证命令
@@ -36,6 +36,7 @@
 ```bash
 git diff --check
 go test ./pkg/datasource/sql/types -run 'DBType|ParseDBType|IndexConstants' -v
+go test ./pkg/protocol/branch ./pkg/protocol/codec -run 'TestBranchStatus|TestBranchReportRequestCodec' -v
 go test ./pkg/datasource/sql/xa -run 'MariaDB|Oracle|DM' -v
 go test ./pkg/datasource/sql -run 'TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
@@ -56,6 +57,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | --- | --- |
 | 新增依赖 | 当前实现不需要修改 `go.mod` 或 `go.sum`。 |
 | 厂商 driver | Oracle 和达梦 driver 由应用通过厂商 adapter API 注入，没有加入项目直接依赖。 |
+| 只读 prepare 状态 | 普通协议枚举已补 `BranchStatusPhaseoneReadonly = 13`，与已有 gRPC `PhaseOne_RDONLY` 值对齐。 |
 | License header | 新增 Go 和 Markdown 文件均包含 Apache Software Foundation license header。 |
 | 生成文件 | `dbtype_string.go` 已随 DB type 测试同步更新。 |
 | 敏感信息 | 文档示例使用占位值，不应包含真实 DSN、密码、wallet 或私有部署信息。 |
@@ -88,6 +90,6 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 release notes 和 PR 描述建议使用准确措辞：
 
 - MariaDB：具备单元测试、文档和 MariaDB 集成测试路径的 XA resource 支持。
-- Oracle：具备 mock 覆盖和配置文档的 `DBMS_XA` 实现，仍需真实数据库验证。
+- Oracle：具备只读 prepare 状态传播 mock 覆盖和配置文档的 `DBMS_XA` 实现，仍需真实数据库验证。
 - 厂商 adapter：用于包装外部 driver 的公开扩展 API，不引入直接厂商依赖。
-- 达梦：真实 driver 许可证、兼容模式、recover 输出和错误码验证前，只标记为 prototype resource。
+- 达梦：具备只读 prepare 状态传播 mock 覆盖；真实 driver 许可证、兼容模式、recover 输出和错误码验证前，只标记为 prototype resource。

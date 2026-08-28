@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 
+	"seata.apache.org/seata-go/v2/pkg/protocol/branch"
 	"seata.apache.org/seata-go/v2/pkg/util/log"
 )
 
@@ -109,11 +110,15 @@ func (tx *XATx) commitOnXA() error {
 	log.Infof("xa branch [%d/%s] XA END + XA PREPARE succeeded", branchID, xid)
 
 	if originTx.tranCtx.IsBranchRegistered() {
-		if err := originTx.report(true); err != nil {
-			log.Errorf("xa branch [%d/%s] failed to report phase-1 success to TC: %v", branchID, xid, err)
+		status := originTx.xaConn.PrepareStatus()
+		if status == branch.BranchStatusUnknown {
+			status = branch.BranchStatusPhaseoneDone
+		}
+		if err := originTx.reportStatus(status); err != nil {
+			log.Errorf("xa branch [%d/%s] failed to report phase-1 status %s to TC: %v", branchID, xid, status.String(), err)
 			return fmt.Errorf("XA PREPARE succeeded but report to TC failed: %w", err)
 		}
-		log.Infof("xa branch [%d/%s] reported phase-1 success to TC", branchID, xid)
+		log.Infof("xa branch [%d/%s] reported phase-1 status %s to TC", branchID, xid, status.String())
 	}
 
 	return nil

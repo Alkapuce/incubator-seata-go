@@ -24,9 +24,9 @@ This document summarizes the local delivery scope for XA multi-database support 
 | Area | Status |
 | --- | --- |
 | MariaDB | Adds `seata-xa-mariadb`, a MariaDB XA resource factory, MySQL-compatible XA lifecycle statements, recovery parsing, MariaDB-specific error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, integration tests, and user documentation. |
-| Oracle | Adds Oracle `DBMS_XA` XID mapping, lifecycle calls, recovery parsing, prepared-statement fallback, already-ended error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, unit tests, and setup/troubleshooting documentation. |
+| Oracle | Adds Oracle `DBMS_XA` XID mapping, lifecycle calls, readonly prepare status reporting, recovery parsing, prepared-statement fallback, already-ended error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, unit tests, and setup/troubleshooting documentation. |
 | Vendor adapters | Adds `RegisterSeataXADriver` and `SeataDriverDescriptor` so applications can register vendor `database/sql/driver.Driver` implementations without adding them as Seata Go dependencies. |
-| Dameng prototype | Adds `types.DBTypeDM` and a `DBMS_XA`-based XA resource prototype with XID mapping, lifecycle calls, recovery parsing, error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, unit tests, and documentation. |
+| Dameng prototype | Adds `types.DBTypeDM` and a `DBMS_XA`-based XA resource prototype with XID mapping, lifecycle calls, readonly prepare status reporting, recovery parsing, error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, unit tests, and documentation. |
 | Kingbase and Oscar | Documents extension direction and open questions. Kingbase should be validated first against PostgreSQL-style prepared transactions. Oscar needs public Go driver, XA API, recovery, and error-code confirmation before code is added. |
 
 ## Verification Commands
@@ -36,6 +36,7 @@ Run the following checks before sending or updating the pull requests:
 ```bash
 git diff --check
 go test ./pkg/datasource/sql/types -run 'DBType|ParseDBType|IndexConstants' -v
+go test ./pkg/protocol/branch ./pkg/protocol/codec -run 'TestBranchStatus|TestBranchReportRequestCodec' -v
 go test ./pkg/datasource/sql/xa -run 'MariaDB|Oracle|DM' -v
 go test ./pkg/datasource/sql -run 'TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
@@ -56,6 +57,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | --- | --- |
 | New dependencies | No `go.mod` or `go.sum` changes are required by the current implementation. |
 | Vendor drivers | Oracle and Dameng drivers are injected by applications through the vendor adapter API; they are not added as direct project dependencies. |
+| Readonly prepare status | The protocol enum now includes `BranchStatusPhaseoneReadonly = 13`, matching the existing gRPC `PhaseOne_RDONLY` value. |
 | License headers | New Go and Markdown files include the Apache Software Foundation license header. |
 | Generated files | `dbtype_string.go` is updated together with DB type tests. |
 | Secrets | Documentation examples use placeholders and must not include real DSNs, passwords, wallets, or private deployment details. |
@@ -88,6 +90,6 @@ The split can be squashed differently if maintainers prefer fewer pull requests,
 Use precise wording in release notes and pull request descriptions:
 
 - MariaDB: supported XA resource with unit tests, documentation, and a MariaDB integration test path.
-- Oracle: `DBMS_XA` implementation with mock coverage and setup documentation; real database validation still required.
+- Oracle: `DBMS_XA` implementation with mock coverage for readonly prepare status propagation and setup documentation; real database validation still required.
 - Vendor adapter: public extension API for wrapping external drivers without adding direct dependencies.
-- Dameng: prototype resource only until driver licensing, compatibility mode, recovery output, and error codes are validated on a real database.
+- Dameng: prototype resource with mock coverage for readonly prepare status propagation; keep it prototype-only until driver licensing, compatibility mode, recovery output, and error codes are validated on a real database.

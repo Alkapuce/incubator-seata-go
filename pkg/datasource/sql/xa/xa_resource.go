@@ -76,6 +76,12 @@ type XAResource interface {
 	Start(ctx context.Context, xid string, flags int) error
 }
 
+// XAResourcePrepareStatus can be implemented by XA resources whose prepare
+// operation returns a meaningful XA result code, such as XA_RDONLY.
+type XAResourcePrepareStatus interface {
+	XAPrepareStatus(ctx context.Context, xid string) (int, error)
+}
+
 // XAErrorClassifier abstracts database-specific XA error classification.
 // This allows the upper layer (conn_xa.go) to handle XA errors without
 // importing database-specific driver packages.

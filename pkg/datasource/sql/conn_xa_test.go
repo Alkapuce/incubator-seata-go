@@ -107,6 +107,10 @@ func (mi *mockSQLInterceptor) After(ctx context.Context, execCtx *types.ExecCont
 // When set, baseMockConn will call this hook for each direct ExecContext.
 var simulateExecContextError func(query string) error
 
+// simulateExecContextHook lets tests inspect or mutate driver args, for example
+// setting sql.Out values returned by database-specific XA control blocks.
+var simulateExecContextHook func(query string, args []driver.NamedValue) error
+
 // simulateQueryContextError injects driver errors for certain SQL strings on the
 // direct QueryContext path (e.g. returning driver.ErrSkip for a parameterized
 // SELECT, as the default go-sql-driver DSN does). When set, baseMockConn calls it
@@ -118,6 +122,27 @@ var simulateQueryContextError func(query string) error
 // case where the in-branch Prepare+Exec fallback itself fails with a real (non
 // ErrSkip) error, so the branch must roll back and report phase-1 failure.
 var simulatePreparedExecError func(query string) error
+
+func setIntOutArg(t *testing.T, args []driver.NamedValue, name string, value int) {
+	t.Helper()
+
+	for _, arg := range args {
+		if arg.Name != name {
+			continue
+		}
+		out, ok := arg.Value.(sql.Out)
+		if !assert.True(t, ok, "arg %s must be sql.Out", name) {
+			return
+		}
+		dest, ok := out.Dest.(*int)
+		if !assert.True(t, ok, "arg %s dest must be *int", name) {
+			return
+		}
+		*dest = value
+		return
+	}
+	assert.Failf(t, "missing output arg", "arg %s not found in %v", name, args)
+}
 
 // fakePreparedStmt models a driver prepared statement. It is what the driver
 // returns from PrepareContext, and its ExecContext/QueryContext succeed by default -
@@ -165,6 +190,11 @@ func baseMockConn(mockConn *mock.MockTestDriverConn) {
 		func(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 			if simulateExecContextError != nil {
 				if err := simulateExecContextError(query); err != nil {
+					return &driver.ResultNoRows, err
+				}
+			}
+			if simulateExecContextHook != nil {
+				if err := simulateExecContextHook(query, args); err != nil {
 					return &driver.ResultNoRows, err
 				}
 			}
@@ -1779,6 +1809,75 @@ func TestXAConn_BeginTx_DoesNotStartPhysicalTx(t *testing.T) {
 
 	err = tx.Rollback()
 	assert.NoError(t, err)
+}
+
+func TestXAConn_BeginTx_DBMSXAReadonlyPrepareReportsReadonlyAndReleases(t *testing.T) {
+	tests := []struct {
+		name       string
+		dbType     types.DBType
+		resourceID string
+		branchID   int64
+	}{
+		{name: "oracle", dbType: types.DBTypeOracle, resourceID: "jdbc:oracle://test/resource", branchID: 1801},
+		{name: "dm", dbType: types.DBTypeDM, resourceID: "jdbc:dm://test/resource", branchID: 1802},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			CleanTxHooks()
+			defer func() {
+				simulateExecContextError = nil
+				simulateExecContextHook = nil
+				CleanTxHooks()
+			}()
+
+			prevTimeout := xaConnTimeout
+			xaConnTimeout = time.Minute
+			defer func() { xaConnTimeout = prevTimeout }()
+
+			xaConn, mockMgr := newMockXAConnForDBType(t, ctrl, tt.branchID, tt.dbType, tt.resourceID,
+				func(param rm.BranchRegisterParam) {
+					assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+					assert.Equal(t, tt.resourceID, param.ResourceId)
+					assert.NotEmpty(t, param.Xid)
+				},
+			)
+			mockMgr.EXPECT().BranchReport(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, param rm.BranchReportParam) error {
+					assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+					assert.Equal(t, tt.branchID, param.BranchId)
+					assert.EqualValues(t, branch.BranchStatusPhaseoneReadonly, param.Status)
+					return nil
+				},
+			).Times(1)
+
+			var prepareCnt int32
+			simulateExecContextHook = func(query string, args []driver.NamedValue) error {
+				if strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_PREPARE(") {
+					atomic.AddInt32(&prepareCnt, 1)
+					setIntOutArg(t, args, "result", xa.XAReadOnly)
+				}
+				return nil
+			}
+
+			ctx := tm.InitSeataContext(context.Background())
+			tm.SetXID(ctx, uuid.NewString())
+
+			tx, err := xaConn.BeginTx(ctx, driver.TxOptions{})
+			assert.NoError(t, err)
+			assert.NotNil(t, xaConn.xaBranchXid)
+			branchXID := xaConn.xaBranchXid.String()
+
+			err = tx.Commit()
+			assert.NoError(t, err)
+			assert.Equal(t, int32(1), atomic.LoadInt32(&prepareCnt))
+			assert.EqualValues(t, branch.BranchStatusPhaseoneReadonly, xaConn.PrepareStatus())
+			_, ok := xaConn.res.Lookup(branchXID)
+			assert.False(t, ok, "readonly prepared branch must not remain held for phase two")
+		})
+	}
 }
 
 func TestXABranchTx_CommitRollbackFailFast(t *testing.T) {

@@ -28,6 +28,7 @@ import (
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/types"
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/util"
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/xa"
+	"seata.apache.org/seata-go/v2/pkg/protocol/branch"
 	"seata.apache.org/seata-go/v2/pkg/tm"
 	"seata.apache.org/seata-go/v2/pkg/util/log"
 )
@@ -49,6 +50,7 @@ type XAConn struct {
 	rollBacked         bool
 	branchRegisterTime time.Time
 	prepareTime        time.Time
+	prepareStatus      branch.BranchStatus
 	isConnKept         bool
 }
 
@@ -489,6 +491,7 @@ func (c *XAConn) cleanXABranchContext() {
 	h, _ := time.ParseDuration("-1000h")
 	c.branchRegisterTime = time.Now().Add(h)
 	c.prepareTime = time.Now().Add(h)
+	c.prepareStatus = branch.BranchStatusUnknown
 	c.xaActive = false
 	if !c.isConnKept {
 		c.xaBranchXid = nil
@@ -551,11 +554,17 @@ func (c *XAConn) Commit(ctx context.Context) error {
 		return c.commitErrorHandle(ctx, err)
 	}
 
-	if err := c.xaResource.XAPrepare(ctx, c.xaBranchXid.String()); err != nil {
+	prepareResult, err := c.xaPrepare(ctx)
+	if err != nil {
 		return c.commitErrorHandle(ctx, err)
 	}
+	c.prepareStatus = branch.BranchStatusPhaseoneDone
 
 	c.prepareTime = time.Now()
+	if prepareResult == xa.XAReadOnly {
+		c.prepareStatus = branch.BranchStatusPhaseoneReadonly
+		c.releaseIfNecessary()
+	}
 
 	// Phase-1 is done: this session no longer has an in-flight XA branch. Clear
 	// only the session-active flag so a subsequent autoCommit statement on the
@@ -567,6 +576,17 @@ func (c *XAConn) Commit(ctx context.Context) error {
 	c.xaActive = false
 
 	return nil
+}
+
+func (c *XAConn) PrepareStatus() branch.BranchStatus {
+	return c.prepareStatus
+}
+
+func (c *XAConn) xaPrepare(ctx context.Context) (int, error) {
+	if prepareResource, ok := c.xaResource.(xa.XAResourcePrepareStatus); ok {
+		return prepareResource.XAPrepareStatus(ctx, c.xaBranchXid.String())
+	}
+	return xa.XAOk, c.xaResource.XAPrepare(ctx, c.xaBranchXid.String())
 }
 
 func (c *XAConn) commitErrorHandle(ctx context.Context, cause error) error {

@@ -127,7 +127,7 @@ Oracle validation must record:
 | --- | --- |
 | `TMNoFlags` on `Start` | Sent as Oracle loose branch flag to match Seata Java behavior. |
 | `TMFail` on `End` | Mapped internally to `TMSuccess` before rollback because Oracle `DBMS_XA.XA_END` does not accept `TMFAIL` in this implementation path. |
-| `XAPrepare` readonly | Treats both `DBMS_XA.XA_OK` and `DBMS_XA.XA_RDONLY` as successful prepare results. |
+| `XAPrepare` readonly | Reads the `DBMS_XA.XA_PREPARE` return code, treats both `XA_OK` and `XA_RDONLY` as successful prepare results, and reports `BranchStatusPhaseoneReadonly` upstream when `XA_RDONLY` is returned. Real driver output-bind behavior still needs database validation. |
 | Recovery scan | Uses `TABLE(DBMS_XA.XA_RECOVER())` and converts `formatid/gtrid/bqual` back to Seata branch XID strings. |
 | Already-ended classification | Classifies `ORA-24756`, `ORA-24761`, `XAER_NOTA`, and wrapped `DBMS_XA` numeric `XAER_NOTA` code `-4` as already-ended conditions. |
 
@@ -137,6 +137,7 @@ Oracle validation must record:
 | --- | --- |
 | `sql: driver does not support the use of Named Parameters` | The selected Oracle driver fell back to legacy statement execution and cannot bind the named parameters required by the DBMS_XA PL/SQL block. |
 | Prepare or statement execution fails during DBMS_XA calls | Confirm that the selected Oracle driver supports PL/SQL blocks with named binds either through connection-level context methods or statement-level context methods. |
+| Readonly prepare is not reported | Confirm that the selected Oracle driver supports `database/sql.Out` named output binds for the `DBMS_XA.XA_PREPARE` result parameter. |
 | `ORA-01031: insufficient privileges` | Grant access to `DBMS_XA` or run validation with a user that has the required package privileges. |
 | `oracle xa gtrid exceeds RAW(64)` or `oracle xa bqual exceeds RAW(64)` | Shorten the global XID or use a future mapping strategy approved by the project. |
 | Recovery returns an invalid branch qualifier | Confirm that all participating applications use the same Seata XID mapping and `formatid=9752`. |

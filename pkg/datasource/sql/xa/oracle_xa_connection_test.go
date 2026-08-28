@@ -19,6 +19,7 @@ package xa
 
 import (
 	"context"
+	gosql "database/sql"
 	"database/sql/driver"
 	"errors"
 	"io"
@@ -144,8 +145,35 @@ func TestOracleXAConnLifecycleExecutesDBMSXA(t *testing.T) {
 
 func TestOracleXAPrepareAcceptsReadonly(t *testing.T) {
 	block := buildOracleXABlock("XA_PREPARE", "l_xid", []string{"DBMS_XA.XA_OK", "DBMS_XA.XA_RDONLY"})
+	statusBlock := buildOracleXAResultBlock("XA_PREPARE", "l_xid", []string{"DBMS_XA.XA_OK", "DBMS_XA.XA_RDONLY"})
 
 	assert.Contains(t, block, "IF l_result NOT IN (DBMS_XA.XA_OK, DBMS_XA.XA_RDONLY) THEN")
+	assert.Contains(t, statusBlock, ":result := DBMS_XA.XA_PREPARE(l_xid)")
+	assert.Contains(t, statusBlock, "IF :result NOT IN (DBMS_XA.XA_OK, DBMS_XA.XA_RDONLY) THEN")
+}
+
+func TestOracleXAPrepareStatusReturnsReadonly(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockConn.EXPECT().ExecContext(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+			assert.Contains(t, query, ":result := DBMS_XA.XA_PREPARE(l_xid)")
+			out, ok := argByName(t, args, "result").Value.(gosql.Out)
+			if assert.True(t, ok) {
+				result, ok := out.Dest.(*int)
+				if assert.True(t, ok) {
+					*result = XAReadOnly
+				}
+			}
+			return &driver.ResultNoRows, nil
+		})
+
+	conn := &OracleXAConn{Conn: mockConn}
+	status, err := conn.XAPrepareStatus(context.Background(), "global-123")
+	assert.NoError(t, err)
+	assert.Equal(t, XAReadOnly, status)
 }
 
 func TestOracleXAExecFallsBackToPrepare(t *testing.T) {
@@ -165,6 +193,7 @@ func TestOracleXAExecFallsBackToPrepare(t *testing.T) {
 			assert.Equal(t, int64(oracleXAFormatID), argByName(t, args, "format_id").Value)
 			assert.Equal(t, "676C6F62616C", argByName(t, args, "gtrid_hex").Value)
 			assert.Equal(t, "2D313233", argByName(t, args, "bqual_hex").Value)
+			assert.IsType(t, gosql.Out{}, argByName(t, args, "result").Value)
 			return &driver.ResultNoRows, nil
 		})
 	mockStmt.EXPECT().Close().Return(nil)

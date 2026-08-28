@@ -71,6 +71,10 @@ const (
 	// BranchStatusPhasetwoRollbackFailedUnretryable the Phase two rollback failed unretryable.
 	// description:Rollback logic is failed but NOT retryable.
 	BranchStatusPhasetwoRollbackFailedUnretryable
+
+	// BranchStatusPhaseoneReadonly the Phase one read-only.
+	// description:Branch transaction only executed read-only statements.
+	BranchStatusPhaseoneReadonly BranchStatus = 13
 )
 
 func (s BranchStatus) String() string {
@@ -97,6 +101,8 @@ func (s BranchStatus) String() string {
 		return "RollbackFailedRetryable"
 	case BranchStatusPhasetwoRollbackFailedUnretryable:
 		return "RollbackFailedUnretryable"
+	case BranchStatusPhaseoneReadonly:
+		return "PhaseoneReadonly"
 	default:
 		return fmt.Sprintf("%d", s)
 	}

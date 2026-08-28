@@ -19,6 +19,7 @@ package xa
 
 import (
 	"context"
+	gosql "database/sql"
 	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
@@ -48,6 +49,25 @@ func execDMXA(ctx context.Context, conn driver.Conn, functionName, branchXID, ca
 	return err
 }
 
+func execDMXAWithResult(ctx context.Context, conn driver.Conn, functionName, branchXID, callArgs string, extraArgs []driver.NamedValue, allowedReturns []string) (int, error) {
+	xid, err := newDMXID(branchXID)
+	if err != nil {
+		return 0, err
+	}
+
+	result := XAOk
+	args := []driver.NamedValue{
+		{Name: "format_id", Value: int64(xid.formatID)},
+		{Name: "gtrid_hex", Value: strings.ToUpper(hex.EncodeToString(xid.gtrid))},
+		{Name: "bqual_hex", Value: strings.ToUpper(hex.EncodeToString(xid.bqual))},
+		{Name: "result", Value: gosql.Out{Dest: &result}},
+	}
+	args = append(args, extraArgs...)
+
+	_, err = util.CtxDriverExecWithPrepareFallback(ctx, conn, buildDMXAResultBlock(functionName, callArgs, allowedReturns), args)
+	return result, err
+}
+
 func buildDMXABlock(functionName, callArgs string, allowedReturns []string) string {
 	return fmt.Sprintf(`DECLARE
   l_xid DBMS_XA_XID := DBMS_XA_XID(:format_id, HEXTORAW(:gtrid_hex), HEXTORAW(:bqual_hex));
@@ -56,6 +76,17 @@ BEGIN
   l_result := DBMS_XA.%s(%s);
   IF l_result NOT IN (%s) THEN
     RAISE_APPLICATION_ERROR(-20776, 'DBMS_XA.%s failed with code ' || l_result);
+  END IF;
+END;`, functionName, callArgs, strings.Join(allowedReturns, ", "), functionName)
+}
+
+func buildDMXAResultBlock(functionName, callArgs string, allowedReturns []string) string {
+	return fmt.Sprintf(`DECLARE
+  l_xid DBMS_XA_XID := DBMS_XA_XID(:format_id, HEXTORAW(:gtrid_hex), HEXTORAW(:bqual_hex));
+BEGIN
+  :result := DBMS_XA.%s(%s);
+  IF :result NOT IN (%s) THEN
+    RAISE_APPLICATION_ERROR(-20776, 'DBMS_XA.%s failed with code ' || :result);
   END IF;
 END;`, functionName, callArgs, strings.Join(allowedReturns, ", "), functionName)
 }

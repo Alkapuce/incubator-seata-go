@@ -70,6 +70,7 @@ DSN。
 
 - 使用支持 `DBMS_XA` 的达梦版本和兼容模式。
 - 达梦 Go driver 需要能通过 `ExecerContext`，或 `PrepareContext` 加 `StmtExecContext` 执行 PL/SQL block。
+- 如果应用需要把 `XA_RDONLY` prepare 分支上报为 `BranchStatusPhaseoneReadonly`，达梦 Go driver 还需要支持 `database/sql.Out` 命名输出参数。
 - 达梦 Go driver 需要能通过 `QueryerContext`，或 `PrepareContext` 加 `StmtQueryContext` 执行恢复扫描。
 - 在把 driver 加入任何 Apache 仓库依赖前，必须确认来源、许可证和再分发条款。
 - 正式使用前，需要在真实达梦数据库上验证 `XA_RECOVER`、branch missing、重复二阶段回调和非法 XID 错误。
@@ -97,5 +98,6 @@ go test ./pkg/datasource/sql/...
 | driver 依赖 | 未加入 `go.mod`，由应用外部注册 driver。 |
 | 兼容模式 | 需要在目标达梦部署上确认 `DBMS_XA` 是否可用；达梦文档说明 MySQL 兼容 XA 模式不使用 `DBMS_XA` 包。 |
 | PL/SQL 与 recover 形态 | 当前原型使用 Oracle-like anonymous block 和 `TABLE(DBMS_XA.XA_RECOVER())` 查询形态，需要结合选定达梦版本和 driver 实测。 |
+| 只读 prepare 上报 | Go 侧通过输出参数读取 `DBMS_XA.XA_PREPARE` 返回码，并在返回 `XA_RDONLY` 时上报 `BranchStatusPhaseoneReadonly`；该绑定行为仍需真实 driver 验证。 |
 | 错误语义 | 捕获真实错误前，仅把通用 `XAER_NOTA` 文本和数字 `-4` 识别为 already-ended。 |
 | 表元数据 | 当前原型没有实现达梦 table metadata cache。 |

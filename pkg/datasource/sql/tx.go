@@ -63,6 +63,7 @@ type (
 	// XAConnection represents an XA-capable connection that can commit or rollback XA transactions
 	XAConnection interface {
 		Commit(ctx context.Context) error
+		PrepareStatus() branch.BranchStatus
 		Rollback(ctx context.Context) error
 	}
 )
@@ -214,10 +215,13 @@ func (tx *Tx) register(ctx *types.TransactionContext) error {
 
 // report
 func (tx *Tx) report(success bool) error {
+	return tx.reportStatus(getStatus(success))
+}
+
+func (tx *Tx) reportStatus(status branch.BranchStatus) error {
 	if tx.tranCtx.BranchID == 0 {
 		return nil
 	}
-	status := getStatus(success)
 	request := rm.BranchReportParam{
 		BranchType: tx.tranCtx.TransactionMode.BranchType(),
 		Xid:        tx.tranCtx.XID,
@@ -240,7 +244,7 @@ func (tx *Tx) report(success bool) error {
 		if err = dataSourceManager.BranchReport(context.Background(), request); err == nil {
 			break
 		}
-		log.Infof("Failed to report [%d / %s] commit done [%v] Retry Countdown: %s", tx.tranCtx.BranchID, tx.tranCtx.XID, success, retry)
+		log.Infof("Failed to report [%d / %s] status [%v] Retry Countdown: %s", tx.tranCtx.BranchID, tx.tranCtx.XID, status, retry)
 		retry.Wait()
 	}
 	return err

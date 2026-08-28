@@ -73,6 +73,9 @@ The prototype maps Seata branch XIDs to `DBMS_XA_XID(formatid, gtrid, bqual)`:
 - Use a Dameng version and compatibility mode that supports `DBMS_XA`.
 - Use a Dameng Go driver that can execute PL/SQL blocks through `ExecerContext`
   or `PrepareContext` plus `StmtExecContext`.
+- Use a Dameng Go driver that supports `database/sql.Out` named output binds if
+  the application needs `XA_RDONLY` prepare branches to be reported as
+  `BranchStatusPhaseoneReadonly`.
 - Use a Dameng Go driver that can run recovery queries through `QueryerContext`
   or `PrepareContext` plus `StmtQueryContext`.
 - Confirm the driver source, license, and redistribution terms before adding it
@@ -105,5 +108,6 @@ go test ./pkg/datasource/sql/...
 | Driver dependency | Not added to `go.mod`; applications register the driver externally. |
 | Compatibility mode | `DBMS_XA` availability must be verified against the target Dameng deployment; Dameng documents that MySQL-compatible XA mode does not use the `DBMS_XA` package. |
 | PL/SQL and recover shape | The prototype uses Oracle-like anonymous blocks and a `TABLE(DBMS_XA.XA_RECOVER())` query shape; both must be checked against the selected Dameng version and driver. |
+| Readonly prepare reporting | The Go side reads `DBMS_XA.XA_PREPARE` through an output bind and reports `BranchStatusPhaseoneReadonly` when `XA_RDONLY` is returned; this bind behavior still needs real-driver validation. |
 | Error semantics | Only generic `XAER_NOTA` text and numeric `-4` are classified as already-ended until real errors are captured. |
 | Table metadata | No Dameng table metadata cache is implemented by this prototype. |

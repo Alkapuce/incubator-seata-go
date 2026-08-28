@@ -42,3 +42,20 @@ func TestBranchReportRequestCodec(t *testing.T) {
 
 	assert.Equal(t, msg, msg2)
 }
+
+func TestBranchReportRequestCodecReadonlyStatus(t *testing.T) {
+	msg := message.BranchReportRequest{
+		Xid:             "readonly-xid",
+		ResourceId:      "root:readonly",
+		Status:          model2.BranchStatusPhaseoneReadonly,
+		BranchId:        56679,
+		BranchType:      model2.BranchTypeXA,
+		ApplicationData: []byte("ReadonlyBranch"),
+	}
+
+	codec := BranchReportRequestCodec{}
+	bytes := codec.Encode(msg)
+	msg2 := codec.Decode(bytes)
+
+	assert.Equal(t, msg, msg2)
+}

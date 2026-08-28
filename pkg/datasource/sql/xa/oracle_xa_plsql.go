@@ -19,6 +19,7 @@ package xa
 
 import (
 	"context"
+	gosql "database/sql"
 	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
@@ -50,6 +51,25 @@ func execOracleXA(ctx context.Context, conn driver.Conn, functionName, branchXID
 	return err
 }
 
+func execOracleXAWithResult(ctx context.Context, conn driver.Conn, functionName, branchXID, callArgs string, extraArgs []driver.NamedValue, allowedReturns []string) (int, error) {
+	xid, err := newOracleXID(branchXID)
+	if err != nil {
+		return 0, err
+	}
+
+	result := XAOk
+	args := []driver.NamedValue{
+		{Name: "format_id", Value: int64(xid.formatID)},
+		{Name: "gtrid_hex", Value: strings.ToUpper(hex.EncodeToString(xid.gtrid))},
+		{Name: "bqual_hex", Value: strings.ToUpper(hex.EncodeToString(xid.bqual))},
+		{Name: "result", Value: gosql.Out{Dest: &result}},
+	}
+	args = append(args, extraArgs...)
+
+	_, err = util.CtxDriverExecWithPrepareFallback(ctx, conn, buildOracleXAResultBlock(functionName, callArgs, allowedReturns), args)
+	return result, err
+}
+
 func buildOracleXABlock(functionName, callArgs string, allowedReturns []string) string {
 	return fmt.Sprintf(`DECLARE
   l_xid DBMS_XA_XID := DBMS_XA_XID(:format_id, HEXTORAW(:gtrid_hex), HEXTORAW(:bqual_hex));
@@ -58,6 +78,17 @@ BEGIN
   l_result := DBMS_XA.%s(%s);
   IF l_result NOT IN (%s) THEN
     RAISE_APPLICATION_ERROR(-20777, 'DBMS_XA.%s failed with code ' || l_result || ', oracle error ' || DBMS_XA.XA_GETLASTOER());
+  END IF;
+END;`, functionName, callArgs, strings.Join(allowedReturns, ", "), functionName)
+}
+
+func buildOracleXAResultBlock(functionName, callArgs string, allowedReturns []string) string {
+	return fmt.Sprintf(`DECLARE
+  l_xid DBMS_XA_XID := DBMS_XA_XID(:format_id, HEXTORAW(:gtrid_hex), HEXTORAW(:bqual_hex));
+BEGIN
+  :result := DBMS_XA.%s(%s);
+  IF :result NOT IN (%s) THEN
+    RAISE_APPLICATION_ERROR(-20777, 'DBMS_XA.%s failed with code ' || :result || ', oracle error ' || DBMS_XA.XA_GETLASTOER());
   END IF;
 END;`, functionName, callArgs, strings.Join(allowedReturns, ", "), functionName)
 }

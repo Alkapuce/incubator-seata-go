@@ -40,6 +40,7 @@ func TestBranchStatus_String_AllCases(t *testing.T) {
 		{BranchStatusPhasetwoRollbacked, "PhasetwoRollbacked"},
 		{BranchStatusPhasetwoRollbackFailedRetryable, "RollbackFailedRetryable"},
 		{BranchStatusPhasetwoRollbackFailedUnretryable, "RollbackFailedUnretryable"},
+		{BranchStatusPhaseoneReadonly, "PhaseoneReadonly"},
 		{BranchStatus(99), "99"}, // default case
 	}
 
@@ -63,4 +64,5 @@ func TestBranchStatus_EnumOrder(t *testing.T) {
 		s := BranchStatus(i)
 		assert.Contains(t, fmt.Sprintf("%T", s), "branch.BranchStatus")
 	}
+	assert.EqualValues(t, 13, BranchStatusPhaseoneReadonly)
 }

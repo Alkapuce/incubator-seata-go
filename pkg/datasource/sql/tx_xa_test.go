@@ -34,6 +34,7 @@ import (
 type mockXAConnection struct {
 	commitErr     error
 	rollbackErr   error
+	prepareStatus branch.BranchStatus
 	commitCalls   int
 	rollbackCalls int
 }
@@ -46,6 +47,10 @@ func (m *mockXAConnection) Commit(ctx context.Context) error {
 func (m *mockXAConnection) Rollback(ctx context.Context) error {
 	m.rollbackCalls++
 	return m.rollbackErr
+}
+
+func (m *mockXAConnection) PrepareStatus() branch.BranchStatus {
+	return m.prepareStatus
 }
 
 func TestXATx_commitOnXA_NoGlobalTransaction(t *testing.T) {
@@ -145,6 +150,42 @@ func TestXATx_commitOnXA_CommitSuccess_BranchRegisteredReportsSuccess(t *testing
 	tranCtx.TransactionMode = types.XAMode
 
 	mockConn := &mockXAConnection{}
+
+	xaTx := &XATx{
+		tx: &Tx{
+			tranCtx: tranCtx,
+			xaConn:  mockConn,
+		},
+	}
+
+	err := xaTx.commitOnXA()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, mockConn.commitCalls)
+}
+
+func TestXATx_commitOnXA_ReadonlyBranchReportsReadonly(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMgr := mock.NewMockDataSourceManager(ctrl)
+	mockMgr.SetBranchType(branch.BranchTypeXA)
+	registerResourceManagerForTest(t, mockMgr)
+	mockMgr.EXPECT().BranchReport(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, param rm.BranchReportParam) error {
+			assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+			assert.Equal(t, int64(123), param.BranchId)
+			assert.EqualValues(t, branch.BranchStatusPhaseoneReadonly, param.Status)
+			assert.Equal(t, "test-xid", param.Xid)
+			return nil
+		},
+	).Times(1)
+
+	tranCtx := types.NewTxCtx()
+	tranCtx.XID = "test-xid"
+	tranCtx.BranchID = 123
+	tranCtx.TransactionMode = types.XAMode
+
+	mockConn := &mockXAConnection{prepareStatus: branch.BranchStatusPhaseoneReadonly}
 
 	xaTx := &XATx{
 		tx: &Tx{

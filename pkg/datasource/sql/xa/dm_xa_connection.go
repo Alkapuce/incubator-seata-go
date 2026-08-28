@@ -86,8 +86,13 @@ func (c *DMXAConn) End(ctx context.Context, xid string, flags int) error {
 }
 
 func (c *DMXAConn) XAPrepare(ctx context.Context, xid string) error {
+	_, err := c.XAPrepareStatus(ctx, xid)
+	return err
+}
+
+func (c *DMXAConn) XAPrepareStatus(ctx context.Context, xid string) (int, error) {
 	log.Infof("dm xa branch prepare, xid %s", xid)
-	return execDMXA(ctx, c.Conn, "XA_PREPARE", xid, "l_xid", nil, []string{
+	return execDMXAWithResult(ctx, c.Conn, "XA_PREPARE", xid, "l_xid", nil, []string{
 		"DBMS_XA.XA_OK",
 		"DBMS_XA.XA_RDONLY",
 	})

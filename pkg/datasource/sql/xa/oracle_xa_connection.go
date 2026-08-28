@@ -93,8 +93,13 @@ func (c *OracleXAConn) End(ctx context.Context, xid string, flags int) error {
 }
 
 func (c *OracleXAConn) XAPrepare(ctx context.Context, xid string) error {
+	_, err := c.XAPrepareStatus(ctx, xid)
+	return err
+}
+
+func (c *OracleXAConn) XAPrepareStatus(ctx context.Context, xid string) (int, error) {
 	log.Infof("xa branch prepare (oracle), xid %s", xid)
-	return execOracleXA(ctx, c.Conn, "XA_PREPARE", xid, "l_xid", nil, []string{
+	return execOracleXAWithResult(ctx, c.Conn, "XA_PREPARE", xid, "l_xid", nil, []string{
 		"DBMS_XA.XA_OK",
 		"DBMS_XA.XA_RDONLY",
 	})
