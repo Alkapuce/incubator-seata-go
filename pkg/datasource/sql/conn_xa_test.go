@@ -664,6 +664,88 @@ func TestXAConn_ExecContext_MariaDBAutoCommitUsesMariaDBXAResource(t *testing.T)
 	assert.False(t, xaConn.xaActive, "MariaDB autoCommit branch must leave no active XA branch")
 }
 
+func TestXAConn_ExecContext_DBMSXAAutoCommitUsesVendorXAResource(t *testing.T) {
+	tests := []struct {
+		name         string
+		dbType       types.DBType
+		resourceID   string
+		branchID     int64
+		wantResource xa.XAResource
+	}{
+		{
+			name:         "oracle",
+			dbType:       types.DBTypeOracle,
+			resourceID:   "jdbc:oracle://test/resource",
+			branchID:     401,
+			wantResource: &xa.OracleXAConn{},
+		},
+		{
+			name:         "dm",
+			dbType:       types.DBTypeDM,
+			resourceID:   "jdbc:dm://test/resource",
+			branchID:     402,
+			wantResource: &xa.DMXAConn{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			CleanTxHooks()
+			defer func() {
+				simulateExecContextError = nil
+				CleanTxHooks()
+			}()
+
+			prevTimeout := xaConnTimeout
+			xaConnTimeout = time.Minute
+			defer func() { xaConnTimeout = prevTimeout }()
+
+			xaConn, mockMgr := newMockXAConnForDBType(t, ctrl, tt.branchID, tt.dbType, tt.resourceID,
+				func(param rm.BranchRegisterParam) {
+					assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+					assert.Equal(t, tt.resourceID, param.ResourceId)
+					assert.NotEmpty(t, param.Xid)
+				},
+			)
+			mockMgr.EXPECT().BranchReport(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, param rm.BranchReportParam) error {
+					assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+					assert.Equal(t, tt.branchID, param.BranchId)
+					assert.EqualValues(t, branch.BranchStatusPhaseoneDone, param.Status)
+					return nil
+				},
+			).Times(1)
+
+			var startCnt, endCnt, prepareCnt int32
+			simulateExecContextError = func(query string) error {
+				upper := strings.ToUpper(query)
+				switch {
+				case strings.Contains(upper, "DBMS_XA.XA_START("):
+					atomic.AddInt32(&startCnt, 1)
+				case strings.Contains(upper, "DBMS_XA.XA_END("):
+					atomic.AddInt32(&endCnt, 1)
+				case strings.Contains(upper, "DBMS_XA.XA_PREPARE("):
+					atomic.AddInt32(&prepareCnt, 1)
+				}
+				return nil
+			}
+
+			ctx := tm.InitSeataContext(context.Background())
+			tm.SetXID(ctx, uuid.NewString())
+
+			_, err := xaConn.ExecContext(ctx, "UPDATE account SET balance = balance - 1 WHERE id = 1", nil)
+			assert.NoError(t, err)
+			assert.IsType(t, tt.wantResource, xaConn.xaResource)
+			assert.Equal(t, int32(1), atomic.LoadInt32(&startCnt))
+			assert.Equal(t, int32(1), atomic.LoadInt32(&endCnt))
+			assert.Equal(t, int32(1), atomic.LoadInt32(&prepareCnt))
+			assert.False(t, xaConn.xaActive, "%s autoCommit branch must leave no active XA branch", tt.name)
+		})
+	}
+}
+
 // Regression for the autoCommit branch-reuse bug: after a statement's XA branch
 // completes phase-1 (XA END + XA PREPARE + report), the session must no longer be
 // marked as having an active branch, otherwise the next autoCommit statement on the
