@@ -23,10 +23,10 @@ This document summarizes the local delivery scope for XA multi-database support 
 
 | Area | Status |
 | --- | --- |
-| MariaDB | Adds `seata-xa-mariadb`, a MariaDB XA resource factory, MySQL-compatible XA lifecycle statements, recovery parsing, MariaDB-specific error classification, XAConn autoCommit plus explicit commit/rollback coverage, integration tests, and user documentation. |
-| Oracle | Adds Oracle `DBMS_XA` XID mapping, lifecycle calls, recovery parsing, prepared-statement fallback, already-ended error classification, XAConn autoCommit plus explicit commit/rollback coverage, unit tests, and setup/troubleshooting documentation. |
+| MariaDB | Adds `seata-xa-mariadb`, a MariaDB XA resource factory, MySQL-compatible XA lifecycle statements, recovery parsing, MariaDB-specific error classification, XAConn autoCommit plus explicit commit/rollback and timeout/prepare-failure coverage, integration tests, and user documentation. |
+| Oracle | Adds Oracle `DBMS_XA` XID mapping, lifecycle calls, recovery parsing, prepared-statement fallback, already-ended error classification, XAConn autoCommit plus explicit commit/rollback and timeout/prepare-failure coverage, unit tests, and setup/troubleshooting documentation. |
 | Vendor adapters | Adds `RegisterSeataXADriver` and `SeataDriverDescriptor` so applications can register vendor `database/sql/driver.Driver` implementations without adding them as Seata Go dependencies. |
-| Dameng prototype | Adds `types.DBTypeDM` and a `DBMS_XA`-based XA resource prototype with XID mapping, lifecycle calls, recovery parsing, error classification, XAConn autoCommit plus explicit commit/rollback coverage, unit tests, and documentation. |
+| Dameng prototype | Adds `types.DBTypeDM` and a `DBMS_XA`-based XA resource prototype with XID mapping, lifecycle calls, recovery parsing, error classification, XAConn autoCommit plus explicit commit/rollback and timeout/prepare-failure coverage, unit tests, and documentation. |
 | Kingbase and Oscar | Documents extension direction and open questions. Kingbase should be validated first against PostgreSQL-style prepared transactions. Oscar needs public Go driver, XA API, recovery, and error-code confirmation before code is added. |
 
 ## Verification Commands

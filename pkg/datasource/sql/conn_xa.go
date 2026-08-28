@@ -543,16 +543,16 @@ func (c *XAConn) Commit(ctx context.Context) error {
 
 	now := time.Now()
 
-	if c.end(ctx, xa.TMSuccess) != nil {
-		return c.commitErrorHandle(ctx)
+	if err := c.end(ctx, xa.TMSuccess); err != nil {
+		return c.commitErrorHandle(ctx, err)
 	}
 
-	if c.checkTimeout(ctx, now) != nil {
-		return c.commitErrorHandle(ctx)
+	if err := c.checkTimeout(now); err != nil {
+		return c.commitErrorHandle(ctx, err)
 	}
 
-	if c.xaResource.XAPrepare(ctx, c.xaBranchXid.String()) != nil {
-		return c.commitErrorHandle(ctx)
+	if err := c.xaResource.XAPrepare(ctx, c.xaBranchXid.String()); err != nil {
+		return c.commitErrorHandle(ctx, err)
 	}
 
 	c.prepareTime = time.Now()
@@ -569,22 +569,21 @@ func (c *XAConn) Commit(ctx context.Context) error {
 	return nil
 }
 
-func (c *XAConn) commitErrorHandle(ctx context.Context) error {
-	var err error
-	if err = c.XaRollback(ctx, c.xaBranchXid); err != nil {
-		err = fmt.Errorf("failed to report XA branch commit-failure xid:%s, err:%w", c.txCtx.XID, err)
+func (c *XAConn) commitErrorHandle(ctx context.Context, cause error) error {
+	if err := c.XaRollback(ctx, c.xaBranchXid); err != nil {
+		c.cleanXABranchContext()
+		return fmt.Errorf("XA branch commit failed xid:%s, err:%w, rollback err:%v", c.txCtx.XID, cause, err)
 	}
 	c.cleanXABranchContext()
-	return err
+	return cause
 }
 
 func (c *XAConn) ShouldBeHeld() bool {
 	return c.res.IsShouldBeHeld() || (c.res.GetDbType().String() != "" && c.res.GetDbType() != types.DBTypeUnknown)
 }
 
-func (c *XAConn) checkTimeout(ctx context.Context, now time.Time) error {
-	if now.Sub(c.branchRegisterTime) > xaConnTimeout {
-		c.XaRollback(ctx, c.xaBranchXid)
+func (c *XAConn) checkTimeout(now time.Time) error {
+	if xaConnTimeout > 0 && now.Sub(c.branchRegisterTime) > xaConnTimeout {
 		return fmt.Errorf("XA branch timeout error xid:%s", c.txCtx.XID)
 	}
 	return nil
