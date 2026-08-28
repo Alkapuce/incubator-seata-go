@@ -56,14 +56,77 @@ const (
 type driverDescriptor struct {
 	dbType            types.DBType
 	target            driver.Driver
+	targetName        string
 	parseDBName       func(dsn string) (string, error)
 	newTableMetaCache func(db *sql.DB, dbName string) datasource.TableMetaCache
+}
+
+// SeataDriverDescriptor describes a database driver that can be wrapped by a
+// Seata SQL proxy driver. It lets vendor integrations register an XA-capable
+// driver without adding the vendor driver as a direct dependency of Seata Go.
+type SeataDriverDescriptor struct {
+	DBType            types.DBType
+	Target            driver.Driver
+	TargetName        string
+	ParseDBName       func(dsn string) (string, error)
+	NewTableMetaCache func(db *sql.DB, dbName string) datasource.TableMetaCache
+}
+
+func (d SeataDriverDescriptor) internal() (driverDescriptor, error) {
+	if d.DBType == types.DBTypeUnknown {
+		return driverDescriptor{}, errors.New("db type is required")
+	}
+	if d.Target == nil {
+		return driverDescriptor{}, errors.New("target driver is required")
+	}
+	if d.ParseDBName == nil {
+		return driverDescriptor{}, errors.New("parse db name function is required")
+	}
+	targetName := d.TargetName
+	if targetName == "" {
+		targetName = d.DBType.String()
+	}
+	return driverDescriptor{
+		dbType:            d.DBType,
+		target:            d.Target,
+		targetName:        targetName,
+		parseDBName:       d.ParseDBName,
+		newTableMetaCache: d.NewTableMetaCache,
+	}, nil
+}
+
+// RegisterSeataXADriver registers a Seata XA driver wrapper for a vendor driver.
+// Call this during application initialization before sql.Open uses driverName.
+func RegisterSeataXADriver(driverName string, descriptor SeataDriverDescriptor) (err error) {
+	if strings.TrimSpace(driverName) == "" {
+		return errors.New("driver name is required")
+	}
+	desc, err := descriptor.internal()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("register seata xa driver %q: %v", driverName, recovered)
+		}
+	}()
+	sql.Register(driverName, &seataXADriver{
+		seataDriver: &seataDriver{
+			branchType: branch.BranchTypeXA,
+			transType:  types.XAMode,
+			descriptor: desc,
+			target:     desc.target,
+			targetName: desc.targetName,
+		},
+	})
+	return nil
 }
 
 var (
 	mySQLDriverDescriptor = driverDescriptor{
 		dbType:      types.DBTypeMySQL,
 		target:      mysql.MySQLDriver{},
+		targetName:  "mysql",
 		parseDBName: parseMySQLDBName,
 		newTableMetaCache: func(db *sql.DB, dbName string) datasource.TableMetaCache {
 			return mysql2.NewTableMetaInstance(db, &mysql.Config{DBName: dbName})
@@ -72,6 +135,7 @@ var (
 	mariaDBDriverDescriptor = driverDescriptor{
 		dbType:      types.DBTypeMARIADB,
 		target:      mysql.MySQLDriver{},
+		targetName:  "mysql",
 		parseDBName: parseMySQLDBName,
 		newTableMetaCache: func(db *sql.DB, dbName string) datasource.TableMetaCache {
 			return mysql2.NewTableMetaInstance(db, &mysql.Config{DBName: dbName})
@@ -80,6 +144,7 @@ var (
 	postgresDriverDescriptor = driverDescriptor{
 		dbType:      types.DBTypePostgreSQL,
 		target:      stdlib.GetDefaultDriver(),
+		targetName:  "pgx",
 		parseDBName: parsePostgresDBName,
 		newTableMetaCache: func(db *sql.DB, dbName string) datasource.TableMetaCache {
 			return postgres2.NewTableMetaInstance(db, dbName)
@@ -92,8 +157,8 @@ func initDriver() {
 		seataDriver: &seataDriver{
 			branchType: branch.BranchTypeAT,
 			transType:  types.ATMode,
-			target:     mysql.MySQLDriver{},
-			targetName: "mysql",
+			target:     mySQLDriverDescriptor.target,
+			targetName: mySQLDriverDescriptor.targetName,
 			descriptor: mySQLDriverDescriptor,
 		},
 	})
@@ -103,6 +168,8 @@ func initDriver() {
 			branchType: branch.BranchTypeAT,
 			transType:  types.ATMode,
 			descriptor: postgresDriverDescriptor,
+			target:     postgresDriverDescriptor.target,
+			targetName: postgresDriverDescriptor.targetName,
 		},
 	})
 
@@ -111,8 +178,8 @@ func initDriver() {
 			branchType: branch.BranchTypeXA,
 			transType:  types.XAMode,
 			descriptor: mySQLDriverDescriptor,
-			target:     mysql.MySQLDriver{},
-			targetName: "mysql",
+			target:     mySQLDriverDescriptor.target,
+			targetName: mySQLDriverDescriptor.targetName,
 		},
 	})
 
@@ -121,8 +188,8 @@ func initDriver() {
 			branchType: branch.BranchTypeXA,
 			transType:  types.XAMode,
 			descriptor: mariaDBDriverDescriptor,
-			target:     mysql.MySQLDriver{},
-			targetName: "mysql",
+			target:     mariaDBDriverDescriptor.target,
+			targetName: mariaDBDriverDescriptor.targetName,
 		},
 	})
 
@@ -131,8 +198,8 @@ func initDriver() {
 			branchType: branch.BranchTypeXA,
 			transType:  types.XAMode,
 			descriptor: postgresDriverDescriptor,
-			target:     stdlib.GetDefaultDriver(),
-			targetName: "pgx",
+			target:     postgresDriverDescriptor.target,
+			targetName: postgresDriverDescriptor.targetName,
 		},
 	})
 }
@@ -214,11 +281,6 @@ func (d *seataDriver) OpenConnector(name string) (c driver.Connector, err error)
 
 func (d *seataDriver) getOpenConnectorProxy(connector driver.Connector, dbType types.DBType,
 	db *sql.DB, dataSourceName string) (driver.Connector, error) {
-	meta, err := parseConnectorMetadata(dataSourceName, dbType)
-	if err != nil {
-		return nil, err
-	}
-
 	dbName, err := d.descriptor.parseDBName(dataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("parse db name: %w", err)
@@ -229,7 +291,6 @@ func (d *seataDriver) getOpenConnectorProxy(connector driver.Connector, dbType t
 		withBranchType(d.branchType),
 		withDBType(dbType),
 		withDBName(dbName),
-		withDBName(meta.dbName),
 		withConnector(connector),
 	}
 	res, err := newResource(options...)
@@ -246,7 +307,9 @@ func (d *seataDriver) getOpenConnectorProxy(connector driver.Connector, dbType t
 		datasource.RegisterTableCache(dbType, mysql2.NewTableMetaInstance(db, cfg))
 	}
 
-	datasource.RegisterTableCache(dbType, d.descriptor.newTableMetaCache(db, dbName))
+	if d.descriptor.newTableMetaCache != nil {
+		datasource.RegisterTableCache(dbType, d.descriptor.newTableMetaCache(db, dbName))
+	}
 	if err = datasource.GetDataSourceManager(d.branchType).RegisterResource(res); err != nil {
 		log.Errorf("register resource: %v", err)
 		return nil, err
