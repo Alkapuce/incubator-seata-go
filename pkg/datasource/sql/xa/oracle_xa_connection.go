@@ -52,7 +52,10 @@ func (c *OracleXAErrorClassifier) IsAlreadyEnded(err error) bool {
 	msg := strings.ToUpper(err.Error())
 	return strings.Contains(msg, "ORA-24756") ||
 		strings.Contains(msg, "ORA-24761") ||
-		strings.Contains(msg, "XAER_NOTA")
+		strings.Contains(msg, "XAER_NOTA") ||
+		strings.Contains(msg, "FAILED WITH CODE -4") ||
+		strings.Contains(msg, "ORACLE ERROR 24756") ||
+		strings.Contains(msg, "ORACLE ERROR 24761")
 }
 
 // OracleXAConn implements XAResource for Oracle using the DBMS_XA PL/SQL package.

@@ -129,7 +129,7 @@ Oracle validation must record:
 | `TMFail` on `End` | Mapped internally to `TMSuccess` before rollback because Oracle `DBMS_XA.XA_END` does not accept `TMFAIL` in this implementation path. |
 | `XAPrepare` readonly | Treats both `DBMS_XA.XA_OK` and `DBMS_XA.XA_RDONLY` as successful prepare results. |
 | Recovery scan | Uses `TABLE(DBMS_XA.XA_RECOVER())` and converts `formatid/gtrid/bqual` back to Seata branch XID strings. |
-| Already-ended classification | Classifies `ORA-24756`, `ORA-24761`, and `XAER_NOTA` as already-ended conditions. |
+| Already-ended classification | Classifies `ORA-24756`, `ORA-24761`, `XAER_NOTA`, and wrapped `DBMS_XA` numeric `XAER_NOTA` code `-4` as already-ended conditions. |
 
 ## Troubleshooting
 
@@ -140,4 +140,3 @@ Oracle validation must record:
 | `ORA-01031: insufficient privileges` | Grant access to `DBMS_XA` or run validation with a user that has the required package privileges. |
 | `oracle xa gtrid exceeds RAW(64)` or `oracle xa bqual exceeds RAW(64)` | Shorten the global XID or use a future mapping strategy approved by the project. |
 | Recovery returns an invalid branch qualifier | Confirm that all participating applications use the same Seata XID mapping and `formatid=9752`. |
-

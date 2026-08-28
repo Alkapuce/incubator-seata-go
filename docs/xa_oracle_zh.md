@@ -118,7 +118,7 @@ go test ./pkg/datasource/sql/...
 | `End` 的 `TMFail` | 内部映射为 `TMSuccess` 后再 rollback，因为当前 `DBMS_XA.XA_END` 路径不接受 `TMFAIL`。 |
 | `XAPrepare` 只读结果 | `DBMS_XA.XA_OK` 和 `DBMS_XA.XA_RDONLY` 都视为 prepare 成功。 |
 | 恢复扫描 | 使用 `TABLE(DBMS_XA.XA_RECOVER())`，再把 `formatid/gtrid/bqual` 转回 Seata branch XID 字符串。 |
-| already-ended 分类 | `ORA-24756`、`ORA-24761` 和 `XAER_NOTA` 会被识别为 already-ended 状态。 |
+| already-ended 分类 | `ORA-24756`、`ORA-24761`、`XAER_NOTA` 和包装后的 `DBMS_XA` 数字返回码 `-4` 会被识别为 already-ended 状态。 |
 
 ## 故障排查
 
@@ -129,4 +129,3 @@ go test ./pkg/datasource/sql/...
 | `ORA-01031: insufficient privileges` | 授权应用用户访问 `DBMS_XA`，或使用具备对应 package 权限的用户验证。 |
 | `oracle xa gtrid exceeds RAW(64)` 或 `oracle xa bqual exceeds RAW(64)` | 缩短全局 XID，或等待项目接受新的 XID 映射策略。 |
 | recover 返回的 branch qualifier 无法解析 | 确认所有参与应用使用相同的 Seata XID 映射和 `formatid=9752`。 |
-

@@ -211,7 +211,10 @@ func TestOracleXAErrorClassifierIsAlreadyEnded(t *testing.T) {
 	assert.True(t, classifier.IsAlreadyEnded(errors.New("ORA-24756: transaction does not exist")))
 	assert.True(t, classifier.IsAlreadyEnded(errors.New("ORA-24761: transaction rolled back")))
 	assert.True(t, classifier.IsAlreadyEnded(errors.New("DBMS_XA.XA_COMMIT failed with code XAER_NOTA")))
+	assert.True(t, classifier.IsAlreadyEnded(errors.New("ORA-20777: DBMS_XA.XA_COMMIT failed with code -4, oracle error 0")))
+	assert.True(t, classifier.IsAlreadyEnded(errors.New("ORA-20777: DBMS_XA.XA_ROLLBACK failed with code -3, oracle error 24756")))
 	assert.False(t, classifier.IsAlreadyEnded(errors.New("ORA-01031: insufficient privileges")))
+	assert.False(t, classifier.IsAlreadyEnded(errors.New("ORA-20777: DBMS_XA.XA_COMMIT failed with code -5, oracle error 0")))
 	assert.False(t, classifier.IsAlreadyEnded(nil))
 }
 
