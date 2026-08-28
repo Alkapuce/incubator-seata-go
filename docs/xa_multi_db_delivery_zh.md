@@ -57,7 +57,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | --- | --- |
 | 新增依赖 | 当前实现不需要修改 `go.mod` 或 `go.sum`。 |
 | 厂商 driver | Oracle 和达梦 driver 由应用通过厂商 adapter API 注入，没有加入项目直接依赖。 |
-| 只读 prepare 状态 | 普通协议枚举已补 `BranchStatusPhaseoneReadonly = 13`，与已有 gRPC `PhaseOne_RDONLY` 值对齐。 |
+| 只读 prepare 状态 | 普通协议枚举已补 `BranchStatusPhaseoneReadonly = 13`，与已有 gRPC `PhaseOne_RDONLY` 值对齐；普通 codec 和 gRPC branch-report request 覆盖均保留 readonly 状态。 |
 | License header | 新增 Go 和 Markdown 文件均包含 Apache Software Foundation license header。 |
 | 生成文件 | `dbtype_string.go` 已随 DB type 测试同步更新。 |
 | 敏感信息 | 文档示例使用占位值，不应包含真实 DSN、密码、wallet 或私有部署信息。 |
