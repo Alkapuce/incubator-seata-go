@@ -25,7 +25,7 @@
 | --- | --- |
 | MySQL recover 清理 | 现有 MySQL XA resource 现在会关闭 `XA RECOVER` 返回的 rows，并同时接受 string 与 `[]byte` recover payload，与 MariaDB 已覆盖的 recover 数据形态保持一致。 |
 | MySQL/MariaDB XID quoting | MySQL-compatible XA 控制语句现在通过共享 helper 引用 XA XID，执行 `XA START`、`XA END`、`XA PREPARE`、`XA COMMIT` 或 `XA ROLLBACK` 前会转义 XID 内嵌单引号。 |
-| PostgreSQL | 保留 prepared transaction XA resource，关闭 `pg_prepared_xacts` recover rows，接受 string 或 `[]byte` recover payload，并已将 `pgconn.PgError` 或文本错误中的 SQLSTATE `42704` / `55000` 分类为 already-ended，用于二阶段幂等状态处理。 |
+| PostgreSQL | 保留 prepared transaction XA resource，引用 prepared-transaction XID SQL literal，关闭 `pg_prepared_xacts` recover rows，接受 string 或 `[]byte` recover payload，并已将 `pgconn.PgError` 或文本错误中的 SQLSTATE `42704` / `55000` 分类为 already-ended，用于二阶段幂等状态处理。 |
 | MariaDB | 新增 `seata-xa-mariadb`、MariaDB XA resource factory、MySQL-compatible XA 生命周期语句、recover 解析、MariaDB 专属错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、集成测试和用户文档。 |
 | Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析与 rows 清理、prepared statement fallback、already-ended 错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和配置/排查文档。 |
 | XA prepared statement | `XAConn.PrepareContext` 返回的 statement 在执行 `StmtExecContext` / `StmtQueryContext` 时进入与直接 `ExecContext` / `QueryContext` 相同的 XA branch 生命周期；query rows 仍在 `Rows.Close` 时延迟提交 branch。 |
@@ -49,6 +49,7 @@ go test ./pkg/datasource/sql/xa -run 'TestPostgresXAConn_Recover|TestPostgresXAE
 go test ./pkg/datasource/sql/xa -run 'TestOracleXAConnRecover|TestOracleXARecoverFallsBackToPrepare|TestDMXAConnRecover|TestDMXARecoverFallsBackToPrepare' -v
 go test ./pkg/datasource/sql/xa -run 'TestMysqlXAConn_Recover|TestMariaDBXAConnRecover' -v
 go test ./pkg/datasource/sql/xa -run 'TestMysqlXAConn_LifecycleSQLQuotesXID|TestMariaDBXAConnLifecycleSQL' -v
+go test ./pkg/datasource/sql/xa -run 'TestPostgresXAConnLifecycleSQLQuotesXID' -v
 go test ./pkg/datasource/sql -run 'TestXAConn_PreparedExecContext_AutoCommitCompletesXABranch|TestXAConn_PreparedQueryContext_AutoCommitDefersBranchCommitUntilRowsClose' -v
 go test ./pkg/datasource/sql -run 'TestDBResourceGetResourceGroupIdUsesRMConfig|TestDBResourceCheckDbVersionControlsXAConnectionHold|TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
@@ -70,7 +71,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | 新增依赖 | 当前实现不需要修改 `go.mod` 或 `go.sum`。 |
 | 厂商 driver | Oracle 和达梦 driver 由应用通过厂商 adapter API 注入，没有加入项目直接依赖。 |
 | Recover rows 清理 | MySQL、MariaDB、PostgreSQL、Oracle 和达梦 recover 读取路径都会关闭 rows；SQL recover 路径接受 driver 以 string 或 bytes 返回 data，DBMS_XA recover 路径已用单元测试覆盖数值、string 和 bytes 字段。 |
-| XID SQL literal quoting | MySQL 和 MariaDB XA 控制语句在构造 SQL string literal 前会转义 branch XID 内嵌单引号。 |
+| XID SQL literal quoting | MySQL、MariaDB 和 PostgreSQL XA 控制语句在构造 SQL string literal 前会转义 branch XID 内嵌单引号。 |
 | XA 连接保活策略 | `DBResource.checkDbVersion` 统一决定是否保活：MySQL 8.0.29 之前版本、MariaDB、Oracle 和达梦保留 prepared 连接；MySQL 8.0.29+ 和 PostgreSQL 不再仅因 DBType 已知而强制保活。 |
 | Prepared statement XA 生命周期 | 带 context 的 prepared statement 在执行时进入 XA branch 生命周期，而不是在 prepare 时提交；prepared query rows 继续保持 close-time branch commit 行为。 |
 | Datasource resource group | `DBResource.GetResourceGroupId` 跟随 `rm.GetRmConfig().TxServiceGroup`，`rm.Resource` 必需方法可安全调用，并与 RM 注册请求使用的 transaction service group 保持一致。 |
@@ -109,7 +110,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 release notes 和 PR 描述建议使用准确措辞：
 
 - MariaDB：具备单元测试、文档和 MariaDB 集成测试路径的 XA resource 支持。
-- PostgreSQL：已有 prepared transaction XA resource，并补充 recover rows 清理和基于 SQLSTATE 的二阶段 already-ended 分类。
+- PostgreSQL：已有 prepared transaction XA resource，并补充 XID SQL literal quoting、recover rows 清理和基于 SQLSTATE 的二阶段 already-ended 分类。
 - Oracle：具备只读 prepare 状态传播 mock 覆盖和配置文档的 `DBMS_XA` 实现，仍需真实数据库验证。
 - 厂商 adapter：用于包装外部 driver 的公开扩展 API，不引入直接厂商依赖。
 - 达梦：具备只读 prepare 状态传播 mock 覆盖；真实 driver 许可证、兼容模式、recover 输出和错误码验证前，只标记为 prototype resource。
