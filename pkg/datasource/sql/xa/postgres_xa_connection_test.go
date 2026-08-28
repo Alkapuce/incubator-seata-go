@@ -123,6 +123,54 @@ func TestPostgresXAConn_RollbackPrepared(t *testing.T) {
 	assert.NoError(t, conn.Rollback(context.Background(), "xid"))
 }
 
+func TestPostgresXAConnLifecycleSQLQuotesXID(t *testing.T) {
+	tests := []struct {
+		name      string
+		run       func(context.Context, *PostgresXAConn) error
+		wantQuery string
+		prepareTx bool
+	}{
+		{
+			name: "prepare",
+			run: func(ctx context.Context, conn *PostgresXAConn) error {
+				if err := conn.Start(ctx, "global'123", TMNoFlags); err != nil {
+					return err
+				}
+				return conn.XAPrepare(ctx, "global'123")
+			},
+			wantQuery: "PREPARE TRANSACTION 'global''123'",
+			prepareTx: true,
+		},
+		{
+			name:      "commit prepared",
+			run:       func(ctx context.Context, conn *PostgresXAConn) error { return conn.Commit(ctx, "global'123", false) },
+			wantQuery: "COMMIT PREPARED 'global''123'",
+		},
+		{
+			name:      "rollback prepared",
+			run:       func(ctx context.Context, conn *PostgresXAConn) error { return conn.Rollback(ctx, "global'123") },
+			wantQuery: "ROLLBACK PREPARED 'global''123'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockConn := mock.NewMockTestDriverConn(ctrl)
+			if tt.prepareTx {
+				mockTx := mock.NewMockTestDriverTx(ctrl)
+				mockConn.EXPECT().BeginTx(gomock.Any(), gomock.Any()).Return(mockTx, nil)
+			}
+			mockConn.EXPECT().ExecContext(gomock.Any(), tt.wantQuery, gomock.Any()).Return(&driver.ResultNoRows, nil)
+
+			conn := &PostgresXAConn{Conn: mockConn}
+			assert.NoError(t, tt.run(context.Background(), conn))
+		})
+	}
+}
+
 func TestPostgresXAConn_Recover(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
