@@ -35,6 +35,7 @@ Seata-go 是一款开源的分布式事务解决方案，提供高性能和简�
 - 新增 Oracle DBMS_XA XID 映射、PL/SQL 生命周期 helper、恢复扫描解析和 already-ended 错误分类
 - 新增 XAConn autoCommit 回归测试，覆盖 Oracle 和达梦 DBMS_XA resource 选择和一阶段上报
 - 新增 XAConn 显式事务回归测试，覆盖 MariaDB、Oracle 和达梦 XA resource 选择、一阶段上报、回滚上报，以及 TC 上报失败时的 prepared branch 保留行为
+- 新增 XAResourceManager 回归测试，覆盖 MariaDB、Oracle 和达梦二阶段 commit/rollback 通过 held XA connection 执行并释放 keeper
 - 将包装后的 Oracle DBMS_XA 数字 XAER_NOTA 返回码识别为 already-ended 错误
 - 支持 Oracle DBMS_XA 生命周期和恢复调用通过 prepared statement 路径回退执行
 - 新增 Oracle XA 配置、权限、XID、恢复和故障排查文档

@@ -34,6 +34,7 @@
   - add Oracle DBMS_XA XID mapping, PL/SQL lifecycle helper, recovery scan parser, and already-ended error classification
   - add XAConn autoCommit regression coverage for Oracle and Dameng DBMS_XA resource selection and phase-one reporting
   - add XAConn explicit transaction regression coverage for MariaDB, Oracle, and Dameng XA resource selection, phase-one reporting, rollback reporting, and prepared-branch handling when TC report fails
+  - add XAResourceManager regression coverage for MariaDB, Oracle, and Dameng phase-two commit/rollback through held XA connections and keeper release
   - classify wrapped Oracle DBMS_XA numeric XAER_NOTA returns as already-ended errors
   - allow Oracle DBMS_XA lifecycle and recovery calls to fall back through prepared statements
   - add Oracle XA setup, permission, XID, recovery, and troubleshooting documentation
