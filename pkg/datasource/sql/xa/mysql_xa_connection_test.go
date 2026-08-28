@@ -245,13 +245,14 @@ func TestMysqlXAConn_Recover(t *testing.T) {
 	}
 
 	mockConn := mock.NewMockTestDriverConn(ctrl)
+	var lastRows *mysqlMockRows
 	mockConn.EXPECT().QueryContext(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
 		func(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-			rows := &mysqlMockRows{}
-			rows.data = [][]interface{}{
+			rows := &mysqlMockRows{data: [][]interface{}{
 				{1, 3, 0, "xid"},
-				{2, 11, 0, "another_xid"},
-			}
+				{2, 11, 0, []byte("another_xid")},
+			}}
+			lastRows = rows
 			return rows, nil
 		})
 
@@ -268,23 +269,26 @@ func TestMysqlXAConn_Recover(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Recover() got = %v, want %v", got, tt.want)
 			}
+			if tt.args.flag&(TMStartRScan) > 0 && (lastRows == nil || !lastRows.closed) {
+				t.Errorf("Recover() did not close rows")
+			}
 		})
 	}
 }
 
 type mysqlMockRows struct {
-	idx  int
-	data [][]interface{}
+	idx    int
+	closed bool
+	data   [][]interface{}
 }
 
 func (m *mysqlMockRows) Columns() []string {
-	//TODO implement me
-	panic("implement me")
+	return []string{"formatID", "gtrid_length", "bqual_length", "data"}
 }
 
 func (m *mysqlMockRows) Close() error {
-	//TODO implement me
-	panic("implement me")
+	m.closed = true
+	return nil
 }
 
 func (m *mysqlMockRows) Next(dest []driver.Value) error {

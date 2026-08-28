@@ -21,7 +21,6 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -186,6 +185,7 @@ func (c *MysqlXAConn) Recover(ctx context.Context, flag int) (xids []string, err
 	if err != nil {
 		return nil, err
 	}
+	defer res.Close()
 
 	dest := make([]driver.Value, 4)
 	for true {
@@ -195,13 +195,14 @@ func (c *MysqlXAConn) Recover(ctx context.Context, flag int) (xids []string, err
 			}
 			return nil, err
 		}
-		gtridAndbqual, ok := dest[3].(string)
-		if !ok {
+		switch gtridAndbqual := dest[3].(type) {
+		case string:
+			xids = append(xids, gtridAndbqual)
+		case []byte:
+			xids = append(xids, string(gtridAndbqual))
+		default:
 			return nil, errors.New("the protocol of XA RECOVER statement is error")
 		}
-		fmt.Printf("gtr: %v", gtridAndbqual)
-
-		xids = append(xids, string(gtridAndbqual))
 	}
 	return xids, err
 }
