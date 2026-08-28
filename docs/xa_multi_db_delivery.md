@@ -37,7 +37,7 @@ Run the following checks before sending or updating the pull requests:
 git diff --check
 go test ./pkg/datasource/sql/types -run 'DBType|ParseDBType|IndexConstants' -v
 go test ./pkg/protocol/branch ./pkg/protocol/codec -run 'TestBranchStatus|TestBranchReportRequestCodec' -v
-go test ./pkg/rm/remoting/grpc -run 'TestGetGrpcRMRemotingInstance|TestGrpcRMRemotingBranchReportReadonlyStatus' -v
+go test ./pkg/rm/remoting/grpc -run 'TestGetGrpcRMRemotingInstance|TestGrpcRMRemotingBranchRegisterXAType|TestGrpcRMRemotingBranchReportReadonlyStatus' -v
 go test ./pkg/remoting/grpc ./pkg/remoting/processor/client
 go test ./pkg/datasource/sql/xa -run 'MariaDB|Oracle|DM' -v
 go test ./pkg/datasource/sql -run 'TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
@@ -60,7 +60,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | New dependencies | No `go.mod` or `go.sum` changes are required by the current implementation. |
 | Vendor drivers | Oracle and Dameng drivers are injected by applications through the vendor adapter API; they are not added as direct project dependencies. |
 | Readonly prepare status | The protocol enum now includes `BranchStatusPhaseoneReadonly = 13`, matching the existing gRPC `PhaseOne_RDONLY` value; normal codec and gRPC branch-report request coverage both preserve the readonly status. |
-| XA branch type over gRPC | `BranchTypeProto` now explicitly includes `XA = 3`, matching the normal protocol `BranchTypeXA` value used by XA branch register, report, commit, and rollback messages; gRPC branch-report and branch-end processor tests cover the XA mapping. |
+| XA branch type over gRPC | `BranchTypeProto` now explicitly includes `XA = 3`, matching the normal protocol `BranchTypeXA` value used by XA branch register, report, commit, and rollback messages; gRPC branch-register, branch-report, and branch-end processor tests cover the XA mapping. |
 | License headers | New Go and Markdown files include the Apache Software Foundation license header. |
 | Generated files | `dbtype_string.go` is updated together with DB type tests. |
 | Secrets | Documentation examples use placeholders and must not include real DSNs, passwords, wallets, or private deployment details. |

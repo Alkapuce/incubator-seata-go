@@ -58,6 +58,43 @@ func TestGetGrpcRMRemotingInstance(t *testing.T) {
 	}
 }
 
+func TestGrpcRMRemotingBranchRegisterXAType(t *testing.T) {
+	var captured *pb.BranchRegisterRequestProto
+	patches := gomonkey.ApplyMethod(reflect.TypeOf(remotinggrpc.GetGrpcRemotingClient()), "SendSyncRequest",
+		func(_ *remotinggrpc.GrpcRemotingClient, msg interface{}) (interface{}, error) {
+			captured = msg.(*pb.BranchRegisterRequestProto)
+			return &pb.BranchRegisterResponseProto{
+				AbstractTransactionResponse: &pb.AbstractTransactionResponseProto{
+					AbstractResultMessage: &pb.AbstractResultMessageProto{
+						ResultCode: pb.ResultCodeProto_Success,
+					},
+				},
+				BranchId: 1001,
+			}, nil
+		})
+	defer patches.Reset()
+
+	branchID, err := (&GrpcRMRemoting{}).BranchRegister(rm.BranchRegisterParam{
+		BranchType:      branch.BranchTypeXA,
+		Xid:             "xa-register-xid",
+		ResourceId:      "xa-resource",
+		LockKeys:        "xa-lock",
+		ApplicationData: "xa-register",
+	})
+
+	assert.NoError(t, err)
+	assert.EqualValues(t, 1001, branchID)
+	if assert.NotNil(t, captured) {
+		assert.Equal(t, pb.MessageTypeProto_TYPE_BRANCH_REGISTER, captured.AbstractTransactionRequest.AbstractMessage.MessageType)
+		assert.Equal(t, "xa-register-xid", captured.Xid)
+		assert.Equal(t, "xa-resource", captured.ResourceId)
+		assert.Equal(t, "xa-lock", captured.LockKey)
+		assert.Equal(t, pb.BranchTypeProto_XA, captured.BranchType)
+		assert.EqualValues(t, branch.BranchTypeXA, pb.BranchTypeProto_XA)
+		assert.Equal(t, "xa-register", captured.ApplicationData)
+	}
+}
+
 func TestGrpcRMRemotingBranchReportReadonlyStatus(t *testing.T) {
 	var captured *pb.BranchReportRequestProto
 	patches := gomonkey.ApplyMethod(reflect.TypeOf(remotinggrpc.GetGrpcRemotingClient()), "SendSyncRequest",
