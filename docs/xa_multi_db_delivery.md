@@ -23,6 +23,7 @@ This document summarizes the local delivery scope for XA multi-database support 
 
 | Area | Status |
 | --- | --- |
+| PostgreSQL | Keeps the prepared-transaction XA resource and now classifies `pgconn.PgError` or text errors with SQLSTATE `42704` / `55000` as already-ended for phase-two idempotency handling. |
 | MariaDB | Adds `seata-xa-mariadb`, a MariaDB XA resource factory, MySQL-compatible XA lifecycle statements, recovery parsing, MariaDB-specific error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, integration tests, and user documentation. |
 | Oracle | Adds Oracle `DBMS_XA` XID mapping, lifecycle calls, readonly prepare status reporting, recovery parsing, prepared-statement fallback, already-ended error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, unit tests, and setup/troubleshooting documentation. |
 | Vendor adapters | Adds `RegisterSeataXADriver` and `SeataDriverDescriptor` so applications can register vendor `database/sql/driver.Driver` implementations without adding them as Seata Go dependencies. |
@@ -39,7 +40,7 @@ go test ./pkg/datasource/sql/types -run 'DBType|ParseDBType|IndexConstants' -v
 go test ./pkg/protocol/branch ./pkg/protocol/codec -run 'TestBranchStatus|TestBranchReportRequestCodec' -v
 go test ./pkg/rm/remoting/grpc -run 'TestGetGrpcRMRemotingInstance|TestGrpcRMRemotingBranchRegisterXAType|TestGrpcRMRemotingBranchReportReadonlyStatus' -v
 go test ./pkg/remoting/grpc ./pkg/remoting/processor/client
-go test ./pkg/datasource/sql/xa -run 'MariaDB|Oracle|DM' -v
+go test ./pkg/datasource/sql/xa -run 'Postgres|MariaDB|Oracle|DM' -v
 go test ./pkg/datasource/sql -run 'TestDBResourceCheckDbVersionControlsXAConnectionHold|TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
 go test ./pkg/datasource/sql/...
@@ -60,6 +61,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | New dependencies | No `go.mod` or `go.sum` changes are required by the current implementation. |
 | Vendor drivers | Oracle and Dameng drivers are injected by applications through the vendor adapter API; they are not added as direct project dependencies. |
 | XA connection hold policy | `DBResource.checkDbVersion` owns the hold decision: MySQL versions before 8.0.29, MariaDB, Oracle, and Dameng hold prepared connections; MySQL 8.0.29+ and PostgreSQL do not get held only because their DB type is known. |
+| PostgreSQL phase-two idempotency | PostgreSQL SQLSTATE `42704` and `55000` are classified as already-ended errors, so duplicate or late phase-two failures can cache committed/rollbacked status consistently with the RM contract. |
 | Readonly prepare status | The protocol enum now includes `BranchStatusPhaseoneReadonly = 13`, matching the existing gRPC `PhaseOne_RDONLY` value; normal codec and gRPC branch-report request coverage both preserve the readonly status. |
 | XA branch type over gRPC | `BranchTypeProto` now explicitly includes `XA = 3`, matching the normal protocol `BranchTypeXA` value used by XA branch register, report, commit, and rollback messages; gRPC branch-register, branch-report, and branch-end processor tests cover the XA mapping. |
 | License headers | New Go and Markdown files include the Apache Software Foundation license header. |
@@ -94,6 +96,7 @@ The split can be squashed differently if maintainers prefer fewer pull requests,
 Use precise wording in release notes and pull request descriptions:
 
 - MariaDB: supported XA resource with unit tests, documentation, and a MariaDB integration test path.
+- PostgreSQL: existing prepared-transaction XA resource with SQLSTATE-based already-ended classification for phase-two idempotency.
 - Oracle: `DBMS_XA` implementation with mock coverage for readonly prepare status propagation and setup documentation; real database validation still required.
 - Vendor adapter: public extension API for wrapping external drivers without adding direct dependencies.
 - Dameng: prototype resource with mock coverage for readonly prepare status propagation; keep it prototype-only until driver licensing, compatibility mode, recovery output, and error codes are validated on a real database.

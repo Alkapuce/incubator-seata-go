@@ -23,6 +23,7 @@
 
 | 范围 | 状态 |
 | --- | --- |
+| PostgreSQL | 保留 prepared transaction XA resource，并已将 `pgconn.PgError` 或文本错误中的 SQLSTATE `42704` / `55000` 分类为 already-ended，用于二阶段幂等状态处理。 |
 | MariaDB | 新增 `seata-xa-mariadb`、MariaDB XA resource factory、MySQL-compatible XA 生命周期语句、recover 解析、MariaDB 专属错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、集成测试和用户文档。 |
 | Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析、prepared statement fallback、already-ended 错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和配置/排查文档。 |
 | 厂商 adapter | 新增 `RegisterSeataXADriver` 和 `SeataDriverDescriptor`，应用可以注册外部 `database/sql/driver.Driver`，无需把厂商 driver 加入 Seata Go 直接依赖。 |
@@ -39,7 +40,7 @@ go test ./pkg/datasource/sql/types -run 'DBType|ParseDBType|IndexConstants' -v
 go test ./pkg/protocol/branch ./pkg/protocol/codec -run 'TestBranchStatus|TestBranchReportRequestCodec' -v
 go test ./pkg/rm/remoting/grpc -run 'TestGetGrpcRMRemotingInstance|TestGrpcRMRemotingBranchRegisterXAType|TestGrpcRMRemotingBranchReportReadonlyStatus' -v
 go test ./pkg/remoting/grpc ./pkg/remoting/processor/client
-go test ./pkg/datasource/sql/xa -run 'MariaDB|Oracle|DM' -v
+go test ./pkg/datasource/sql/xa -run 'Postgres|MariaDB|Oracle|DM' -v
 go test ./pkg/datasource/sql -run 'TestDBResourceCheckDbVersionControlsXAConnectionHold|TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
 go test ./pkg/datasource/sql/...
@@ -60,6 +61,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | 新增依赖 | 当前实现不需要修改 `go.mod` 或 `go.sum`。 |
 | 厂商 driver | Oracle 和达梦 driver 由应用通过厂商 adapter API 注入，没有加入项目直接依赖。 |
 | XA 连接保活策略 | `DBResource.checkDbVersion` 统一决定是否保活：MySQL 8.0.29 之前版本、MariaDB、Oracle 和达梦保留 prepared 连接；MySQL 8.0.29+ 和 PostgreSQL 不再仅因 DBType 已知而强制保活。 |
+| PostgreSQL 二阶段幂等 | PostgreSQL SQLSTATE `42704` 和 `55000` 已分类为 already-ended 错误，重复或延迟二阶段失败时可按 RM 契约缓存 committed/rollbacked 状态。 |
 | 只读 prepare 状态 | 普通协议枚举已补 `BranchStatusPhaseoneReadonly = 13`，与已有 gRPC `PhaseOne_RDONLY` 值对齐；普通 codec 和 gRPC branch-report request 覆盖均保留 readonly 状态。 |
 | gRPC XA 分支类型 | `BranchTypeProto` 已显式包含 `XA = 3`，与 XA 分支注册、上报、提交和回滚消息使用的普通协议 `BranchTypeXA` 值对齐；gRPC branch-register、branch-report 和 branch-end processor 测试均覆盖 XA 映射。 |
 | License header | 新增 Go 和 Markdown 文件均包含 Apache Software Foundation license header。 |
@@ -94,6 +96,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 release notes 和 PR 描述建议使用准确措辞：
 
 - MariaDB：具备单元测试、文档和 MariaDB 集成测试路径的 XA resource 支持。
+- PostgreSQL：已有 prepared transaction XA resource，并补充基于 SQLSTATE 的二阶段 already-ended 分类。
 - Oracle：具备只读 prepare 状态传播 mock 覆盖和配置文档的 `DBMS_XA` 实现，仍需真实数据库验证。
 - 厂商 adapter：用于包装外部 driver 的公开扩展 API，不引入直接厂商依赖。
 - 达梦：具备只读 prepare 状态传播 mock 覆盖；真实 driver 许可证、兼容模式、recover 输出和错误码验证前，只标记为 prototype resource。
