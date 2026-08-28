@@ -255,6 +255,8 @@ func (db *DBResource) checkDbVersion() error {
 		}
 	case types.DBTypeMARIADB:
 		db.shouldBeHeld = true
+	case types.DBTypeOracle, types.DBTypeDM:
+		db.shouldBeHeld = true
 	}
 	return nil
 }

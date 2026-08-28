@@ -40,7 +40,7 @@ go test ./pkg/protocol/branch ./pkg/protocol/codec -run 'TestBranchStatus|TestBr
 go test ./pkg/rm/remoting/grpc -run 'TestGetGrpcRMRemotingInstance|TestGrpcRMRemotingBranchRegisterXAType|TestGrpcRMRemotingBranchReportReadonlyStatus' -v
 go test ./pkg/remoting/grpc ./pkg/remoting/processor/client
 go test ./pkg/datasource/sql/xa -run 'MariaDB|Oracle|DM' -v
-go test ./pkg/datasource/sql -run 'TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
+go test ./pkg/datasource/sql -run 'TestDBResourceCheckDbVersionControlsXAConnectionHold|TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
 go test ./pkg/datasource/sql/...
 go test ./...
@@ -59,6 +59,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | --- | --- |
 | 新增依赖 | 当前实现不需要修改 `go.mod` 或 `go.sum`。 |
 | 厂商 driver | Oracle 和达梦 driver 由应用通过厂商 adapter API 注入，没有加入项目直接依赖。 |
+| XA 连接保活策略 | `DBResource.checkDbVersion` 统一决定是否保活：MySQL 8.0.29 之前版本、MariaDB、Oracle 和达梦保留 prepared 连接；MySQL 8.0.29+ 和 PostgreSQL 不再仅因 DBType 已知而强制保活。 |
 | 只读 prepare 状态 | 普通协议枚举已补 `BranchStatusPhaseoneReadonly = 13`，与已有 gRPC `PhaseOne_RDONLY` 值对齐；普通 codec 和 gRPC branch-report request 覆盖均保留 readonly 状态。 |
 | gRPC XA 分支类型 | `BranchTypeProto` 已显式包含 `XA = 3`，与 XA 分支注册、上报、提交和回滚消息使用的普通协议 `BranchTypeXA` 值对齐；gRPC branch-register、branch-report 和 branch-end processor 测试均覆盖 XA 映射。 |
 | License header | 新增 Go 和 Markdown 文件均包含 Apache Software Foundation license header。 |

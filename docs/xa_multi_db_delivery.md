@@ -40,7 +40,7 @@ go test ./pkg/protocol/branch ./pkg/protocol/codec -run 'TestBranchStatus|TestBr
 go test ./pkg/rm/remoting/grpc -run 'TestGetGrpcRMRemotingInstance|TestGrpcRMRemotingBranchRegisterXAType|TestGrpcRMRemotingBranchReportReadonlyStatus' -v
 go test ./pkg/remoting/grpc ./pkg/remoting/processor/client
 go test ./pkg/datasource/sql/xa -run 'MariaDB|Oracle|DM' -v
-go test ./pkg/datasource/sql -run 'TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
+go test ./pkg/datasource/sql -run 'TestDBResourceCheckDbVersionControlsXAConnectionHold|TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
 go test ./pkg/datasource/sql/...
 go test ./...
@@ -59,6 +59,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | --- | --- |
 | New dependencies | No `go.mod` or `go.sum` changes are required by the current implementation. |
 | Vendor drivers | Oracle and Dameng drivers are injected by applications through the vendor adapter API; they are not added as direct project dependencies. |
+| XA connection hold policy | `DBResource.checkDbVersion` owns the hold decision: MySQL versions before 8.0.29, MariaDB, Oracle, and Dameng hold prepared connections; MySQL 8.0.29+ and PostgreSQL do not get held only because their DB type is known. |
 | Readonly prepare status | The protocol enum now includes `BranchStatusPhaseoneReadonly = 13`, matching the existing gRPC `PhaseOne_RDONLY` value; normal codec and gRPC branch-report request coverage both preserve the readonly status. |
 | XA branch type over gRPC | `BranchTypeProto` now explicitly includes `XA = 3`, matching the normal protocol `BranchTypeXA` value used by XA branch register, report, commit, and rollback messages; gRPC branch-register, branch-report, and branch-end processor tests cover the XA mapping. |
 | License headers | New Go and Markdown files include the Apache Software Foundation license header. |
