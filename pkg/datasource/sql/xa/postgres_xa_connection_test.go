@@ -20,10 +20,12 @@ package xa
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
 	"io"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/mock"
@@ -129,4 +131,25 @@ func TestPostgresXAConn_Recover(t *testing.T) {
 	got, err := conn.Recover(context.Background(), TMStartRScan|TMEndRScan)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"xid", "another-xid"}, got)
+}
+
+func TestPostgresXAErrorClassifierIsAlreadyEnded(t *testing.T) {
+	classifier := &PostgresXAErrorClassifier{}
+
+	assert.True(t, classifier.IsAlreadyEnded(&pgconn.PgError{
+		Code:    "42704",
+		Message: "prepared transaction does not exist",
+	}))
+	assert.True(t, classifier.IsAlreadyEnded(&pgconn.PgError{
+		Code:    "55000",
+		Message: "prepared transaction is not in prerequisite state",
+	}))
+	assert.True(t, classifier.IsAlreadyEnded(errors.New("ERROR: prepared transaction does not exist (SQLSTATE 42704)")))
+	assert.True(t, classifier.IsAlreadyEnded(errors.New("ERROR: prepared transaction is not in prerequisite state (SQLSTATE 55000)")))
+	assert.False(t, classifier.IsAlreadyEnded(&pgconn.PgError{
+		Code:    "23505",
+		Message: "duplicate key value violates unique constraint",
+	}))
+	assert.False(t, classifier.IsAlreadyEnded(errors.New("plain error")))
+	assert.False(t, classifier.IsAlreadyEnded(nil))
 }

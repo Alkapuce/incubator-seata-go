@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/types"
 	"seata.apache.org/seata-go/v2/pkg/util/log"
 )
@@ -48,7 +50,17 @@ func (f *postgresXAResourceFactory) CreateErrorClassifier() XAErrorClassifier {
 type PostgresXAErrorClassifier struct{}
 
 func (c *PostgresXAErrorClassifier) IsAlreadyEnded(err error) bool {
-	// TODO: check pgconn.PgError SQLSTATE "42704" / "55000"
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "42704" || pgErr.Code == "55000"
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "SQLSTATE 42704") || strings.Contains(msg, "SQLSTATE 55000") {
+		return true
+	}
 	return false
 }
 

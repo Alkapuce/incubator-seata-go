@@ -29,6 +29,7 @@ import (
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/bluele/gcache"
 	"github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/types"
@@ -299,6 +300,12 @@ func TestXAResourceManager_BranchCommitFailureStatus(t *testing.T) {
 			wantCached: branch.BranchStatusPhasetwoCommitted,
 		},
 		{
+			name:       "postgres undefined prepared transaction",
+			dbType:     types.DBTypePostgreSQL,
+			commitErr:  &pgconn.PgError{Code: "42704", Message: "prepared transaction does not exist"},
+			wantCached: branch.BranchStatusPhasetwoCommitted,
+		},
+		{
 			name:       "generic commit error",
 			dbType:     types.DBTypeMARIADB,
 			commitErr:  errors.New("driver commit timeout"),
@@ -374,6 +381,12 @@ func TestXAResourceManager_BranchRollbackFailureStatus(t *testing.T) {
 			name:        "dm xaer nota",
 			dbType:      types.DBTypeDM,
 			rollbackErr: errors.New("DM DBMS_XA.XA_ROLLBACK failed with code XAER_NOTA"),
+			wantCached:  branch.BranchStatusPhasetwoRollbacked,
+		},
+		{
+			name:        "postgres invalid prepared transaction state",
+			dbType:      types.DBTypePostgreSQL,
+			rollbackErr: &pgconn.PgError{Code: "55000", Message: "prepared transaction is not in prerequisite state"},
 			wantCached:  branch.BranchStatusPhasetwoRollbacked,
 		},
 		{
