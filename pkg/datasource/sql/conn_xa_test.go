@@ -555,6 +555,128 @@ func TestXAConn_BeginTx_ExplicitXAModeUsesDatabaseXAResource(t *testing.T) {
 	}
 }
 
+func TestXAConn_BeginTx_ExplicitXAModeRollbackUsesDatabaseXAResource(t *testing.T) {
+	tests := []struct {
+		name         string
+		dbType       types.DBType
+		resourceID   string
+		branchID     int64
+		wantResource xa.XAResource
+		wantStart    func(string) bool
+		wantEnd      func(string) bool
+		wantRollback func(string) bool
+	}{
+		{
+			name:         "mariadb",
+			dbType:       types.DBTypeMARIADB,
+			resourceID:   "jdbc:mariadb://test/resource",
+			branchID:     601,
+			wantResource: &xa.MariaDBXAConn{},
+			wantStart: func(query string) bool {
+				return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(query)), "XA START")
+			},
+			wantEnd: func(query string) bool {
+				return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(query)), "XA END")
+			},
+			wantRollback: func(query string) bool {
+				return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(query)), "XA ROLLBACK")
+			},
+		},
+		{
+			name:         "oracle",
+			dbType:       types.DBTypeOracle,
+			resourceID:   "jdbc:oracle://test/resource",
+			branchID:     602,
+			wantResource: &xa.OracleXAConn{},
+			wantStart: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_START(")
+			},
+			wantEnd: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_END(")
+			},
+			wantRollback: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_ROLLBACK(")
+			},
+		},
+		{
+			name:         "dm",
+			dbType:       types.DBTypeDM,
+			resourceID:   "jdbc:dm://test/resource",
+			branchID:     603,
+			wantResource: &xa.DMXAConn{},
+			wantStart: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_START(")
+			},
+			wantEnd: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_END(")
+			},
+			wantRollback: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_ROLLBACK(")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			CleanTxHooks()
+			defer func() {
+				simulateExecContextError = nil
+				CleanTxHooks()
+			}()
+
+			prevTimeout := xaConnTimeout
+			xaConnTimeout = time.Minute
+			defer func() { xaConnTimeout = prevTimeout }()
+
+			xaConn, mockMgr := newMockXAConnForDBType(t, ctrl, tt.branchID, tt.dbType, tt.resourceID,
+				func(param rm.BranchRegisterParam) {
+					assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+					assert.Equal(t, tt.resourceID, param.ResourceId)
+					assert.NotEmpty(t, param.Xid)
+				},
+			)
+			mockMgr.EXPECT().BranchReport(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, param rm.BranchReportParam) error {
+					assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+					assert.Equal(t, tt.branchID, param.BranchId)
+					assert.EqualValues(t, branch.BranchStatusPhaseoneFailed, param.Status)
+					return nil
+				},
+			).Times(1)
+
+			var startCnt, endCnt, rollbackCnt int32
+			simulateExecContextError = func(query string) error {
+				switch {
+				case tt.wantStart(query):
+					atomic.AddInt32(&startCnt, 1)
+				case tt.wantEnd(query):
+					atomic.AddInt32(&endCnt, 1)
+				case tt.wantRollback(query):
+					atomic.AddInt32(&rollbackCnt, 1)
+				}
+				return nil
+			}
+
+			ctx := tm.InitSeataContext(context.Background())
+			tm.SetXID(ctx, uuid.NewString())
+
+			tx, err := xaConn.BeginTx(ctx, driver.TxOptions{})
+			assert.NoError(t, err)
+			assert.IsType(t, tt.wantResource, xaConn.xaResource)
+			assert.Equal(t, int32(1), atomic.LoadInt32(&startCnt))
+			assert.True(t, xaConn.xaActive, "%s explicit XA branch must be active after BeginTx", tt.name)
+
+			err = tx.Rollback()
+			assert.NoError(t, err)
+			assert.Equal(t, int32(1), atomic.LoadInt32(&endCnt))
+			assert.Equal(t, int32(1), atomic.LoadInt32(&rollbackCnt))
+			assert.False(t, xaConn.xaActive, "%s explicit XA branch must leave no active XA branch after rollback", tt.name)
+		})
+	}
+}
+
 func TestXAConn_Rollback_XAER_RMFAIL(t *testing.T) {
 	tests := []struct {
 		name string

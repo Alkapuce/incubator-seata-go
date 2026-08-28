@@ -23,10 +23,10 @@
 
 | 范围 | 状态 |
 | --- | --- |
-| MariaDB | 新增 `seata-xa-mariadb`、MariaDB XA resource factory、MySQL-compatible XA 生命周期语句、recover 解析、MariaDB 专属错误分类、XAConn autoCommit 与显式事务覆盖、集成测试和用户文档。 |
-| Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、recover 解析、prepared statement fallback、already-ended 错误分类、XAConn autoCommit 与显式事务覆盖、单元测试和配置/排查文档。 |
+| MariaDB | 新增 `seata-xa-mariadb`、MariaDB XA resource factory、MySQL-compatible XA 生命周期语句、recover 解析、MariaDB 专属错误分类、XAConn autoCommit 与显式事务 commit/rollback 覆盖、集成测试和用户文档。 |
+| Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、recover 解析、prepared statement fallback、already-ended 错误分类、XAConn autoCommit 与显式事务 commit/rollback 覆盖、单元测试和配置/排查文档。 |
 | 厂商 adapter | 新增 `RegisterSeataXADriver` 和 `SeataDriverDescriptor`，应用可以注册外部 `database/sql/driver.Driver`，无需把厂商 driver 加入 Seata Go 直接依赖。 |
-| 达梦原型 | 新增 `types.DBTypeDM` 和基于 `DBMS_XA` 的 XA resource 原型，覆盖 XID 映射、生命周期调用、recover 解析、错误分类、XAConn autoCommit 与显式事务覆盖、单元测试和文档。 |
+| 达梦原型 | 新增 `types.DBTypeDM` 和基于 `DBMS_XA` 的 XA resource 原型，覆盖 XID 映射、生命周期调用、recover 解析、错误分类、XAConn autoCommit 与显式事务 commit/rollback 覆盖、单元测试和文档。 |
 | Kingbase 与 Oscar | 已记录扩展方向和待确认问题。Kingbase 优先按 PostgreSQL prepared transaction 路径验证；Oscar 需要先确认公开 Go driver、XA API、recover 和错误码。 |
 
 ## 验证命令
