@@ -29,6 +29,7 @@
   - support XA branch enrollment for autoCommit statements in a global transaction: each autoCommit statement is registered and prepared as its own complete XA branch (note: N autoCommit statements create N branches at the TC); parameterized statements (which the default go-sql-driver DSN answers with `driver.ErrSkip`) are executed via an in-branch Prepare+Exec fallback so they stay inside the branch
   - support PostgreSQL XA via pgx driver
   - support MariaDB XA resource factory, driver registration, lifecycle statements, recovery scan, and MariaDB-specific error classification
+  - add MariaDB XA integration coverage for duplicate second-phase callbacks
   - add Oracle DBMS_XA XID mapping, PL/SQL lifecycle helper, recovery scan parser, and already-ended error classification
   - classify wrapped Oracle DBMS_XA numeric XAER_NOTA returns as already-ended errors
   - allow Oracle DBMS_XA lifecycle and recovery calls to fall back through prepared statements

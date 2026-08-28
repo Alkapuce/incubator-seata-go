@@ -57,11 +57,10 @@ MariaDB 集成测试默认不会运行。设置 `SEATA_GO_TEST_MARIADB_DSN` 后�
 
 ```bash
 SEATA_GO_TEST_MARIADB_DSN='root:password@tcp(127.0.0.1:3306)/seata_go_test?multiStatements=true&parseTime=true' \
-  go test -tags integration ./pkg/datasource/sql/xa -run TestMariaDBXAConnIntegrationCommitRollbackRecover -v
+  go test -tags integration ./pkg/datasource/sql/xa -run 'TestMariaDBXAConnIntegration' -v
 ```
 
-该测试会验证一个 prepare 后提交的分支、一个 prepare 后回滚的分支、`XA RECOVER` 结果，以及 prepared
-branch 清理。
+这些集成测试会验证 prepare 后提交分支、prepare 后回滚分支、`XA RECOVER` 结果、prepared branch 清理，以及重复二阶段回调行为。
 
 ## 故障排查
 

@@ -179,6 +179,10 @@ func TestMariaDBXAErrorClassifierIsAlreadyEnded(t *testing.T) {
 		Number:  types.ErrCodeXAER_RMFAIL_IDLE,
 		Message: "XAER_RMFAIL: The command cannot be executed when global transaction is in the PREPARED state",
 	}))
+	assert.True(t, classifier.IsAlreadyEnded(&mysql.MySQLError{
+		Number:  types.ErrCodeXAER_RMFAIL_IDLE,
+		Message: "XAER_RMFAIL: The XA transaction has already ended",
+	}))
 	assert.False(t, classifier.IsAlreadyEnded(&mysql.MySQLError{
 		Number:  types.ErrCodeXAER_INVAL,
 		Message: "XAER_INVAL: Invalid XID",

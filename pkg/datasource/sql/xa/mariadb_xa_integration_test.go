@@ -109,6 +109,93 @@ func TestMariaDBXAConnIntegrationCommitRollbackRecover(t *testing.T) {
 	require.Equal(t, 0, countRowsByID(t, db, tableName, 2))
 }
 
+func TestMariaDBXAConnIntegrationDuplicateSecondPhaseCallbacks(t *testing.T) {
+	dsn := os.Getenv("SEATA_GO_TEST_MARIADB_DSN")
+	if dsn == "" {
+		t.Skip("SEATA_GO_TEST_MARIADB_DSN is not set")
+	}
+
+	db, err := sql.Open("mysql", dsn)
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	require.NoError(t, db.PingContext(ctx))
+
+	tableName := "seata_go_mariadb_xa_duplicate_it"
+	_, err = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+tableName)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, "CREATE TABLE "+tableName+" (id INT PRIMARY KEY, value VARCHAR(64)) ENGINE=InnoDB")
+	require.NoError(t, err)
+	defer db.ExecContext(ctx, "DROP TABLE IF EXISTS "+tableName)
+
+	var committedXID string
+	require.NoError(t, withMariaDBXAResource(ctx, db, func(resource XAResource, execer driver.ExecerContext) error {
+		committedXID = uniqueMariaDBXID(t, "duplicate-commit")
+		if err := resource.Start(ctx, committedXID, TMNoFlags); err != nil {
+			return err
+		}
+		if _, err := execer.ExecContext(ctx, "INSERT INTO "+tableName+" (id, value) VALUES (1, 'commit')", nil); err != nil {
+			return err
+		}
+		if err := resource.End(ctx, committedXID, TMSuccess); err != nil {
+			return err
+		}
+		if err := resource.XAPrepare(ctx, committedXID); err != nil {
+			return err
+		}
+		return resource.Commit(ctx, committedXID, false)
+	}))
+	require.Equal(t, 1, countRowsByID(t, db, tableName, 1))
+
+	require.NoError(t, withMariaDBXAResource(ctx, db, func(resource XAResource, execer driver.ExecerContext) error {
+		duplicateErr := resource.Commit(ctx, committedXID, false)
+		t.Logf("duplicate MariaDB XA COMMIT returned: %v", duplicateErr)
+		prepared, err := resource.Recover(ctx, TMStartRScan|TMEndRScan)
+		if err != nil {
+			return err
+		}
+		if containsXID(prepared, committedXID) {
+			return fmt.Errorf("committed xid %s remained in XA RECOVER result %v", committedXID, prepared)
+		}
+		return nil
+	}))
+	require.Equal(t, 1, countRowsByID(t, db, tableName, 1))
+
+	var rolledBackXID string
+	require.NoError(t, withMariaDBXAResource(ctx, db, func(resource XAResource, execer driver.ExecerContext) error {
+		rolledBackXID = uniqueMariaDBXID(t, "duplicate-rollback")
+		if err := resource.Start(ctx, rolledBackXID, TMNoFlags); err != nil {
+			return err
+		}
+		if _, err := execer.ExecContext(ctx, "INSERT INTO "+tableName+" (id, value) VALUES (2, 'rollback')", nil); err != nil {
+			return err
+		}
+		if err := resource.End(ctx, rolledBackXID, TMSuccess); err != nil {
+			return err
+		}
+		if err := resource.XAPrepare(ctx, rolledBackXID); err != nil {
+			return err
+		}
+		return resource.Rollback(ctx, rolledBackXID)
+	}))
+	require.Equal(t, 0, countRowsByID(t, db, tableName, 2))
+
+	require.NoError(t, withMariaDBXAResource(ctx, db, func(resource XAResource, execer driver.ExecerContext) error {
+		duplicateErr := resource.Rollback(ctx, rolledBackXID)
+		t.Logf("duplicate MariaDB XA ROLLBACK returned: %v", duplicateErr)
+		prepared, err := resource.Recover(ctx, TMStartRScan|TMEndRScan)
+		if err != nil {
+			return err
+		}
+		if containsXID(prepared, rolledBackXID) {
+			return fmt.Errorf("rolled back xid %s remained in XA RECOVER result %v", rolledBackXID, prepared)
+		}
+		return nil
+	}))
+	require.Equal(t, 0, countRowsByID(t, db, tableName, 2))
+}
+
 func withMariaDBXAResource(ctx context.Context, db *sql.DB, f func(XAResource, driver.ExecerContext) error) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {

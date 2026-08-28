@@ -46,7 +46,7 @@ Run the MariaDB integration test when a MariaDB DSN is available:
 
 ```bash
 SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTime=true' \
-  go test -tags integration ./pkg/datasource/sql/xa -run TestMariaDBXAConnIntegrationCommitRollbackRecover -v
+  go test -tags integration ./pkg/datasource/sql/xa -run 'TestMariaDBXAConnIntegration' -v
 ```
 
 ## Compliance Check
@@ -78,7 +78,7 @@ The split can be squashed differently if maintainers prefer fewer pull requests,
 | P0 | Oracle real database validation | Unit tests prove the Go-side PL/SQL construction, but a real Oracle driver and database must confirm named binds, privileges, recovery rows, and error text. |
 | P0 | Dameng driver and license validation | The prototype intentionally avoids a direct driver dependency until the official driver source, versioning, license, and redistribution terms are clear. |
 | P1 | Dameng real database validation | `DBMS_XA` availability, `XA_COMPATIBLE_MODE`, recovery shape, and real error codes must be verified before marking Dameng production-ready. |
-| P1 | MariaDB duplicate callback behavior | The current integration test covers prepared commit, prepared rollback, recovery visibility, and cleanup; duplicate second-phase callback behavior should be recorded before broad support claims. |
+| P1 | MariaDB duplicate callback execution | The integration suite now includes duplicate second-phase callback coverage; run it with a real MariaDB DSN before broad support claims. |
 | P2 | Kingbase prototype decision | A PostgreSQL prepared-transaction-based prototype is plausible, but it should wait for driver and compatibility confirmation. |
 | P2 | Oscar follow-up | Add code only after public Go driver, XA API, recovery, and error-code evidence is available. |
 
