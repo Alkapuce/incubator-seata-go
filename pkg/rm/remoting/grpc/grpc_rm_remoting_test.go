@@ -83,10 +83,13 @@ func TestGrpcRMRemotingBranchReportReadonlyStatus(t *testing.T) {
 
 	assert.NoError(t, err)
 	if assert.NotNil(t, captured) {
+		assert.Equal(t, pb.MessageTypeProto_TYPE_BRANCH_STATUS_REPORT, captured.AbstractTransactionRequest.AbstractMessage.MessageType)
 		assert.Equal(t, "readonly-xid", captured.Xid)
 		assert.EqualValues(t, 13, captured.BranchId)
 		assert.Equal(t, pb.BranchStatusProto_PhaseOne_RDONLY, captured.Status)
-		assert.EqualValues(t, branch.BranchTypeXA, captured.BranchType)
+		assert.Equal(t, pb.BranchTypeProto_XA, captured.BranchType)
+		assert.EqualValues(t, branch.BranchTypeXA, pb.BranchTypeProto_XA)
+		assert.Equal(t, "XA", pb.BranchTypeProto_XA.String())
 		assert.Equal(t, "readonly", captured.ApplicationData)
 	}
 }
