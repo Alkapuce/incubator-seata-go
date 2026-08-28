@@ -22,10 +22,14 @@ import (
 	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"strconv"
 	"strings"
 )
 
 const oracleXATransLoose = 0x00010000
+
+const oracleXARecoverQuery = "SELECT x.formatid, RAWTOHEX(x.gtrid), RAWTOHEX(x.bqual) FROM TABLE(DBMS_XA.XA_RECOVER()) x"
 
 func execOracleXA(ctx context.Context, conn driver.Conn, functionName, branchXID, callArgs string, extraArgs []driver.NamedValue, allowedReturns []string) error {
 	execer, ok := conn.(driver.ExecerContext)
@@ -59,4 +63,101 @@ BEGIN
     RAISE_APPLICATION_ERROR(-20777, 'DBMS_XA.%s failed with code ' || l_result || ', oracle error ' || DBMS_XA.XA_GETLASTOER());
   END IF;
 END;`, functionName, callArgs, strings.Join(allowedReturns, ", "), functionName)
+}
+
+func recoverOracleXA(ctx context.Context, conn driver.Conn) ([]string, error) {
+	queryer, ok := conn.(driver.QueryerContext)
+	if !ok {
+		return nil, fmt.Errorf("oracle xa recover requires driver.QueryerContext, got %T", conn)
+	}
+
+	rows, err := queryer.QueryContext(ctx, oracleXARecoverQuery, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	xids := make([]string, 0)
+	dest := make([]driver.Value, 3)
+	for {
+		if err = rows.Next(dest); err != nil {
+			if err == io.EOF {
+				return xids, nil
+			}
+			return nil, err
+		}
+		branchXID, err := oracleRecoverRowBranchXID(dest)
+		if err != nil {
+			return nil, err
+		}
+		xids = append(xids, branchXID)
+	}
+}
+
+func oracleRecoverRowBranchXID(dest []driver.Value) (string, error) {
+	if len(dest) < 3 {
+		return "", fmt.Errorf("oracle xa recover row has %d columns, want 3", len(dest))
+	}
+	formatID, err := oracleIntValue(dest[0])
+	if err != nil {
+		return "", fmt.Errorf("parse oracle xa recover format id: %w", err)
+	}
+	gtrid, err := oracleHexValue(dest[1])
+	if err != nil {
+		return "", fmt.Errorf("parse oracle xa recover gtrid: %w", err)
+	}
+	bqual, err := oracleHexValue(dest[2])
+	if err != nil {
+		return "", fmt.Errorf("parse oracle xa recover bqual: %w", err)
+	}
+	xid, err := newOracleXIDFromParts(formatID, gtrid, bqual)
+	if err != nil {
+		return "", err
+	}
+	return xid.branchXID()
+}
+
+func oracleIntValue(value driver.Value) (int, error) {
+	switch v := value.(type) {
+	case int64:
+		return int(v), nil
+	case int:
+		return v, nil
+	case float64:
+		return int(v), nil
+	case []byte:
+		n, err := strconv.Atoi(string(v))
+		if err != nil {
+			return 0, err
+		}
+		return n, nil
+	case string:
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, err
+		}
+		return n, nil
+	default:
+		return 0, fmt.Errorf("unsupported value type %T", value)
+	}
+}
+
+func oracleHexValue(value driver.Value) ([]byte, error) {
+	var text string
+	switch v := value.(type) {
+	case []byte:
+		text = string(v)
+	case string:
+		text = v
+	default:
+		return nil, fmt.Errorf("unsupported value type %T", value)
+	}
+	if text == "" {
+		return nil, nil
+	}
+	decoded, err := hex.DecodeString(text)
+	if err != nil {
+		return nil, err
+	}
+	return decoded, nil
 }

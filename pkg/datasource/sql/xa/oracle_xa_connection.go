@@ -21,7 +21,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
-	"fmt"
+	"strings"
 	"time"
 
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/types"
@@ -46,8 +46,13 @@ func (f *oracleXAResourceFactory) CreateErrorClassifier() XAErrorClassifier {
 type OracleXAErrorClassifier struct{}
 
 func (c *OracleXAErrorClassifier) IsAlreadyEnded(err error) bool {
-	// TODO: check ORA-24756 (transaction does not exist) / ORA-24761 (rolled back)
-	return false
+	if err == nil {
+		return false
+	}
+	msg := strings.ToUpper(err.Error())
+	return strings.Contains(msg, "ORA-24756") ||
+		strings.Contains(msg, "ORA-24761") ||
+		strings.Contains(msg, "XAER_NOTA")
 }
 
 // OracleXAConn implements XAResource for Oracle using the DBMS_XA PL/SQL package.
@@ -107,11 +112,16 @@ func (c *OracleXAConn) Rollback(ctx context.Context, xid string) error {
 }
 
 func (c *OracleXAConn) Recover(ctx context.Context, flag int) ([]string, error) {
+	startRscan := (flag & TMStartRScan) > 0
+	endRscan := (flag & TMEndRScan) > 0
+
+	if !startRscan && !endRscan && flag != TMNoFlags {
+		return nil, errors.New("invalid arguments")
+	}
 	if (flag & TMStartRScan) == 0 {
 		return nil, nil
 	}
-	// TODO: SELECT globalid, branchid FROM DBA_PENDING_TRANSACTIONS
-	return nil, fmt.Errorf("Oracle XA recover not yet implemented")
+	return recoverOracleXA(ctx, c.Conn)
 }
 
 func (c *OracleXAConn) Forget(ctx context.Context, xid string) error {

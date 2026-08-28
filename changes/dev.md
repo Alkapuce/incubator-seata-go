@@ -29,7 +29,7 @@
   - support XA branch enrollment for autoCommit statements in a global transaction: each autoCommit statement is registered and prepared as its own complete XA branch (note: N autoCommit statements create N branches at the TC); parameterized statements (which the default go-sql-driver DSN answers with `driver.ErrSkip`) are executed via an in-branch Prepare+Exec fallback so they stay inside the branch
   - support PostgreSQL XA via pgx driver
   - support MariaDB XA resource factory, driver registration, lifecycle statements, recovery scan, and MariaDB-specific error classification
-  - add Oracle DBMS_XA XID mapping and PL/SQL lifecycle helper for start, end, prepare, commit, rollback, and forget
+  - add Oracle DBMS_XA XID mapping, PL/SQL lifecycle helper, recovery scan parser, and already-ended error classification
   - [[#1130](https://github.com/apache/incubator-seata-go/issues/1130)] support MySQL multi-value INSERT in AT mode for composite and mixed primary keys
 
 ### bugfix：
