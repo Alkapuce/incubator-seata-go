@@ -555,6 +555,143 @@ func TestXAConn_BeginTx_ExplicitXAModeUsesDatabaseXAResource(t *testing.T) {
 	}
 }
 
+func TestXAConn_BeginTx_ExplicitXAModeReportFailureKeepsPreparedBranch(t *testing.T) {
+	tests := []struct {
+		name         string
+		dbType       types.DBType
+		resourceID   string
+		branchID     int64
+		wantStart    func(string) bool
+		wantEnd      func(string) bool
+		wantPrepare  func(string) bool
+		wantRollback func(string) bool
+	}{
+		{
+			name:       "mariadb",
+			dbType:     types.DBTypeMARIADB,
+			resourceID: "jdbc:mariadb://test/resource",
+			branchID:   901,
+			wantStart: func(query string) bool {
+				return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(query)), "XA START")
+			},
+			wantEnd: func(query string) bool {
+				return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(query)), "XA END")
+			},
+			wantPrepare: func(query string) bool {
+				return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(query)), "XA PREPARE")
+			},
+			wantRollback: func(query string) bool {
+				return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(query)), "XA ROLLBACK")
+			},
+		},
+		{
+			name:       "oracle",
+			dbType:     types.DBTypeOracle,
+			resourceID: "jdbc:oracle://test/resource",
+			branchID:   902,
+			wantStart: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_START(")
+			},
+			wantEnd: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_END(")
+			},
+			wantPrepare: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_PREPARE(")
+			},
+			wantRollback: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_ROLLBACK(")
+			},
+		},
+		{
+			name:       "dm",
+			dbType:     types.DBTypeDM,
+			resourceID: "jdbc:dm://test/resource",
+			branchID:   903,
+			wantStart: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_START(")
+			},
+			wantEnd: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_END(")
+			},
+			wantPrepare: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_PREPARE(")
+			},
+			wantRollback: func(query string) bool {
+				return strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_ROLLBACK(")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			CleanTxHooks()
+			defer func() {
+				simulateExecContextError = nil
+				CleanTxHooks()
+			}()
+
+			prevTimeout := xaConnTimeout
+			xaConnTimeout = time.Minute
+			defer func() { xaConnTimeout = prevTimeout }()
+
+			xaConn, mockMgr := newMockXAConnForDBType(t, ctrl, tt.branchID, tt.dbType, tt.resourceID,
+				func(param rm.BranchRegisterParam) {
+					assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+					assert.Equal(t, tt.resourceID, param.ResourceId)
+					assert.NotEmpty(t, param.Xid)
+				},
+			)
+
+			reportErr := errors.New("branch report failed")
+			var reportCnt int32
+			mockMgr.EXPECT().BranchReport(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+				func(ctx context.Context, param rm.BranchReportParam) error {
+					atomic.AddInt32(&reportCnt, 1)
+					assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+					assert.Equal(t, tt.branchID, param.BranchId)
+					assert.EqualValues(t, branch.BranchStatusPhaseoneDone, param.Status)
+					return reportErr
+				},
+			)
+
+			var startCnt, endCnt, prepareCnt, rollbackCnt int32
+			simulateExecContextError = func(query string) error {
+				switch {
+				case tt.wantStart(query):
+					atomic.AddInt32(&startCnt, 1)
+				case tt.wantEnd(query):
+					atomic.AddInt32(&endCnt, 1)
+				case tt.wantPrepare(query):
+					atomic.AddInt32(&prepareCnt, 1)
+				case tt.wantRollback(query):
+					atomic.AddInt32(&rollbackCnt, 1)
+				}
+				return nil
+			}
+
+			ctx := tm.InitSeataContext(context.Background())
+			tm.SetXID(ctx, uuid.NewString())
+
+			tx, err := xaConn.BeginTx(ctx, driver.TxOptions{})
+			assert.NoError(t, err)
+			assert.Equal(t, int32(1), atomic.LoadInt32(&startCnt))
+
+			err = tx.Commit()
+			assert.ErrorIs(t, err, reportErr)
+			assert.Contains(t, err.Error(), "XA PREPARE succeeded but report to TC failed")
+			assert.Equal(t, int32(1), atomic.LoadInt32(&endCnt))
+			assert.Equal(t, int32(1), atomic.LoadInt32(&prepareCnt))
+			assert.Equal(t, int32(0), atomic.LoadInt32(&rollbackCnt), "prepared branch must not rollback when only TC report failed")
+			assert.GreaterOrEqual(t, atomic.LoadInt32(&reportCnt), int32(1))
+			assert.False(t, xaConn.xaActive, "%s reported-failed prepared branch must not remain active", tt.name)
+			assert.NotNil(t, xaConn.xaBranchXid, "%s prepared branch xid must remain available for phase-2 or recover", tt.name)
+			assert.False(t, xaConn.prepareTime.IsZero(), "%s prepare time must remain recorded after prepare succeeds", tt.name)
+		})
+	}
+}
+
 func TestXAConn_BeginTx_ExplicitXAModeRollbackUsesDatabaseXAResource(t *testing.T) {
 	tests := []struct {
 		name         string
