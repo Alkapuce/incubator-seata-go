@@ -54,7 +54,7 @@ The MariaDB integration test is disabled by default. Set `SEATA_GO_TEST_MARIADB_
 
 ```bash
 SEATA_GO_TEST_MARIADB_DSN='root:password@tcp(127.0.0.1:3306)/seata_go_test?multiStatements=true&parseTime=true' \
-  go test -tags integration ./pkg/datasource/sql/xa -run 'TestMariaDBXAConnIntegration' -v
+  go test -count=1 -tags integration ./pkg/datasource/sql/xa -run 'TestMariaDBXAConnIntegration' -v
 ```
 
 The integration tests validate a prepared commit branch, a prepared rollback branch, `XA RECOVER`, cleanup of prepared branches, and duplicate second-phase callback behavior.

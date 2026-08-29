@@ -63,8 +63,13 @@ go test ./...
 
 ```bash
 SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTime=true' \
-  go test -tags integration ./pkg/datasource/sql/xa -run 'TestMariaDBXAConnIntegration' -v
+  go test -count=1 -tags integration ./pkg/datasource/sql/xa -run 'TestMariaDBXAConnIntegration' -v
 ```
+
+当前交付分支已使用本地临时 Docker MariaDB `mariadb:11.4`
+（`11.4.13-MariaDB-ubu2404`）验证通过 commit、rollback、recover 清理和重复二阶段回调。
+重复回调返回 MariaDB `Error 1397: XAER_NOTA: Unknown XID`，且已完成 XID 不会残留在
+`XA RECOVER` 结果中。
 
 ## 合规检查
 
@@ -104,7 +109,6 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | P0 | Oracle 真实库验证 | 单元测试只能证明 Go 侧 PL/SQL 构造；真实 Oracle driver 和数据库还需要确认命名绑定、权限、recover 行和错误文本。 |
 | P0 | 达梦 driver 与许可证验证 | 当前原型刻意不引入直接依赖，官方 driver 来源、版本、许可证和再分发条款明确前不能声明生产支持。 |
 | P1 | 达梦真实库验证 | `DBMS_XA` 可用性、`XA_COMPATIBLE_MODE`、recover 形态和真实错误码需要实测。 |
-| P1 | MariaDB 重复回调执行 | 集成测试套件已包含重复二阶段回调覆盖；广泛声明支持前仍需带真实 MariaDB DSN 执行。 |
 | P2 | Kingbase 原型决策 | 基于 PostgreSQL prepared transaction 的原型可行性较高，但应等待 driver 和兼容性确认。 |
 | P2 | Oscar 后续跟进 | 只有在公开 Go driver、XA API、recover 和错误码证据明确后再新增代码。 |
 
@@ -112,7 +116,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 
 release notes 和 PR 描述建议使用准确措辞：
 
-- MariaDB：具备单元测试、文档和 MariaDB 集成测试路径的 XA resource 支持。
+- MariaDB：具备单元测试、文档，并已在 MariaDB 11.4.13 上验证 lifecycle、recover 清理和重复二阶段回调的 XA resource 支持。
 - PostgreSQL：已有 prepared transaction XA resource，并补充 XID SQL literal quoting、recover rows 清理和基于 SQLSTATE 的二阶段 already-ended 分类。
 - Oracle：具备只读 prepare 状态传播 mock 覆盖和配置文档的 `DBMS_XA` 实现，仍需真实数据库验证。
 - 厂商 adapter：用于包装外部 driver 的公开扩展 API，不引入直接厂商依赖。

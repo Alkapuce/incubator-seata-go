@@ -63,8 +63,14 @@ Run the MariaDB integration test when a MariaDB DSN is available:
 
 ```bash
 SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTime=true' \
-  go test -tags integration ./pkg/datasource/sql/xa -run 'TestMariaDBXAConnIntegration' -v
+  go test -count=1 -tags integration ./pkg/datasource/sql/xa -run 'TestMariaDBXAConnIntegration' -v
 ```
+
+Local Docker validation for this delivery branch passed against `mariadb:11.4`
+(`11.4.13-MariaDB-ubu2404`) for commit, rollback, recover cleanup, and duplicate
+second-phase callback coverage. Duplicate callbacks returned MariaDB
+`Error 1397: XAER_NOTA: Unknown XID` and did not leave the completed XIDs in
+`XA RECOVER`.
 
 ## Compliance Check
 
@@ -104,7 +110,6 @@ The split can be squashed differently if maintainers prefer fewer pull requests,
 | P0 | Oracle real database validation | Unit tests prove the Go-side PL/SQL construction, but a real Oracle driver and database must confirm named binds, privileges, recovery rows, and error text. |
 | P0 | Dameng driver and license validation | The prototype intentionally avoids a direct driver dependency until the official driver source, versioning, license, and redistribution terms are clear. |
 | P1 | Dameng real database validation | `DBMS_XA` availability, `XA_COMPATIBLE_MODE`, recovery shape, and real error codes must be verified before marking Dameng production-ready. |
-| P1 | MariaDB duplicate callback execution | The integration suite now includes duplicate second-phase callback coverage; run it with a real MariaDB DSN before broad support claims. |
 | P2 | Kingbase prototype decision | A PostgreSQL prepared-transaction-based prototype is plausible, but it should wait for driver and compatibility confirmation. |
 | P2 | Oscar follow-up | Add code only after public Go driver, XA API, recovery, and error-code evidence is available. |
 
@@ -112,7 +117,9 @@ The split can be squashed differently if maintainers prefer fewer pull requests,
 
 Use precise wording in release notes and pull request descriptions:
 
-- MariaDB: supported XA resource with unit tests, documentation, and a MariaDB integration test path.
+- MariaDB: supported XA resource with unit tests, documentation, and MariaDB
+  11.4.13 integration coverage for lifecycle, recovery cleanup, and duplicate
+  second-phase callbacks.
 - PostgreSQL: existing prepared-transaction XA resource with XID SQL literal quoting, recover row cleanup, and SQLSTATE-based already-ended classification for phase-two idempotency.
 - Oracle: `DBMS_XA` implementation with mock coverage for readonly prepare status propagation and setup documentation; real database validation still required.
 - Vendor adapter: public extension API for wrapping external drivers without adding direct dependencies.
