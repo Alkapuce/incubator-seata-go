@@ -110,7 +110,7 @@ adding go-ora to the project dependency graph.
 | XA branch type over gRPC | `BranchTypeProto` now explicitly includes `XA = 3`, matching the normal protocol `BranchTypeXA` value used by XA branch register, report, commit, and rollback messages; gRPC branch-register, branch-report, and branch-end processor tests cover the XA mapping. |
 | License headers | New Go and Markdown files include the Apache Software Foundation license header. |
 | Generated files | `dbtype_string.go` is updated together with DB type tests. |
-| Secrets | Documentation examples use placeholders and must not include real DSNs, passwords, wallets, or private deployment details; generated RM resource IDs strip URL userinfo, MySQL/vendor-style `user:password@` prefixes, and credential-like key-value fields such as `user=`, `password=`, `sslpassword=`, `passfile=`, and SSL key/certificate paths before registration, while preserving non-credential key-value fields used for stable resource identity. |
+| Secrets | Documentation examples use placeholders and must not include real DSNs, passwords, wallets, or private deployment details; generated RM resource IDs strip URL userinfo, MySQL/vendor-style `user:password@` prefixes, and credential-like key-value fields such as `user=`, `password=`, `sslpassword=`, `passfile=`, and SSL key/certificate paths before registration, while preserving non-credential key-value fields used for stable resource identity; RM branch-end processor logs record `applicationData` length instead of the payload. |
 
 ## Suggested Pull Request Split
 

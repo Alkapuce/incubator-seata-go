@@ -48,7 +48,7 @@ func initBranchRollback() {
 type rmBranchRollbackProcessor struct{}
 
 func (f *rmBranchRollbackProcessor) Process(ctx context.Context, rpcMessage message.RpcMessage) error {
-	log.Infof("the rm client received  rmBranchRollback rpcMessage %#v from tc server.", rpcMessage)
+	log.Infof("the rm client received rmBranchRollback rpcMessage id %d type %v from tc server.", rpcMessage.ID, rpcMessage.Type)
 
 	switch protocol.Protocol(config.GetTransportConfig().Protocol) {
 	case protocol.ProtocolGRPC:
@@ -64,7 +64,7 @@ func (f *rmBranchRollbackProcessor) handleGrpcBranchRollback(ctx context.Context
 	branchID := request.AbstractBranchEndRequest.BranchId
 	resourceID := request.AbstractBranchEndRequest.ResourceId
 	applicationData := request.AbstractBranchEndRequest.ApplicationData
-	log.Infof("Branch rollback request: xid %v, branchID %v, resourceID %v, applicationData %v", xid, branchID, resourceID, applicationData)
+	log.Infof("Branch rollback request: xid %v, branchID %v, resourceID %v, applicationDataLen %d", xid, branchID, resourceID, len(applicationData))
 	branchType := branch.BranchType(request.AbstractBranchEndRequest.BranchType)
 	branchResource := rm.BranchResource{
 		BranchType:      branchType,
@@ -78,7 +78,7 @@ func (f *rmBranchRollbackProcessor) handleGrpcBranchRollback(ctx context.Context
 		log.Errorf("branch rollback error: %s", err.Error())
 		return err
 	}
-	log.Infof("branch rollback success: xid %s, branchID %d, resourceID %s, applicationData %s", xid, branchID, resourceID, applicationData)
+	log.Infof("branch rollback success: xid %s, branchID %d, resourceID %s, applicationDataLen %d", xid, branchID, resourceID, len(applicationData))
 
 	var (
 		resultCode pb.ResultCodeProto
@@ -109,7 +109,7 @@ func (f *rmBranchRollbackProcessor) handleGrpcBranchRollback(ctx context.Context
 		log.Errorf("send branch rollback response error: {%#v}", err.Error())
 		return err
 	}
-	log.Infof("send branch rollback response success: xid %s, branchID %d, resourceID %s, applicationData %s", xid, branchID, resourceID, applicationData)
+	log.Infof("send branch rollback response success: xid %s, branchID %d, resourceID %s, applicationDataLen %d", xid, branchID, resourceID, len(applicationData))
 	return nil
 }
 
@@ -119,7 +119,7 @@ func (f *rmBranchRollbackProcessor) handleGettyBranchRollback(ctx context.Contex
 	branchID := request.BranchId
 	resourceID := request.ResourceId
 	applicationData := request.ApplicationData
-	log.Infof("Branch rollback request: xid %v, branchID %v, resourceID %v, applicationData %v", xid, branchID, resourceID, applicationData)
+	log.Infof("Branch rollback request: xid %v, branchID %v, resourceID %v, applicationDataLen %d", xid, branchID, resourceID, len(applicationData))
 	branchResource := rm.BranchResource{
 		BranchType:      request.BranchType,
 		Xid:             xid,
@@ -132,7 +132,7 @@ func (f *rmBranchRollbackProcessor) handleGettyBranchRollback(ctx context.Contex
 		log.Errorf("branch rollback error: %s", err.Error())
 		return err
 	}
-	log.Infof("branch rollback success: xid %s, branchID %d, resourceID %s, applicationData %s", xid, branchID, resourceID, applicationData)
+	log.Infof("branch rollback success: xid %s, branchID %d, resourceID %s, applicationDataLen %d", xid, branchID, resourceID, len(applicationData))
 
 	var (
 		resultCode message.ResultCode
@@ -163,6 +163,6 @@ func (f *rmBranchRollbackProcessor) handleGettyBranchRollback(ctx context.Contex
 		log.Errorf("send branch rollback response error: {%#v}", err.Error())
 		return err
 	}
-	log.Infof("send branch rollback response success: xid %s, branchID %d, resourceID %s, applicationData %s", xid, branchID, resourceID, applicationData)
+	log.Infof("send branch rollback response success: xid %s, branchID %d, resourceID %s, applicationDataLen %d", xid, branchID, resourceID, len(applicationData))
 	return nil
 }

@@ -106,7 +106,7 @@ rollback branch、recover 可见性与清理，以及 readonly prepare 返回 `X
 | gRPC XA 分支类型 | `BranchTypeProto` 已显式包含 `XA = 3`，与 XA 分支注册、上报、提交和回滚消息使用的普通协议 `BranchTypeXA` 值对齐；gRPC branch-register、branch-report 和 branch-end processor 测试均覆盖 XA 映射。 |
 | License header | 新增 Go 和 Markdown 文件均包含 Apache Software Foundation license header。 |
 | 生成文件 | `dbtype_string.go` 已随 DB type 测试同步更新。 |
-| 敏感信息 | 文档示例使用占位值，不应包含真实 DSN、密码、wallet 或私有部署信息；生成 RM resource ID 时会在注册前去除 URL userinfo、MySQL/vendor 风格的 `user:password@` 前缀，以及 `user=`、`password=`、`sslpassword=`、`passfile=` 和 SSL key/certificate 路径等 key-value 字段，同时保留用于稳定识别 resource 的非凭据 key-value 字段。 |
+| 敏感信息 | 文档示例使用占位值，不应包含真实 DSN、密码、wallet 或私有部署信息；生成 RM resource ID 时会在注册前去除 URL userinfo、MySQL/vendor 风格的 `user:password@` 前缀，以及 `user=`、`password=`、`sslpassword=`、`passfile=` 和 SSL key/certificate 路径等 key-value 字段，同时保留用于稳定识别 resource 的非凭据 key-value 字段；RM branch-end processor 日志只记录 `applicationData` 长度，不输出 payload。 |
 
 ## 建议 PR 拆分
 
