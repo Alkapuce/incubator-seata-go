@@ -33,6 +33,7 @@
 | SQL XA driver fallback | MySQL、MariaDB 和 PostgreSQL XA 控制语句及 recover 查询现在使用共享 driver prepare fallback；底层 driver 在连接级 exec/query 返回 `driver.ErrSkip` 时，仍可在同一物理连接上 prepare 并执行对应语句。 |
 | Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析与 rows 清理、prepared statement fallback、already-ended 错误分类、DBMS_XA driver transaction state 管理、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试、配置/排查文档，以及 Oracle Free 加 go-ora 外部验证。 |
 | XA prepared statement | `XAConn.PrepareContext` 返回的 statement 在执行 `StmtExecContext` / `StmtQueryContext` 时进入与直接 `ExecContext` / `QueryContext` 相同的 XA branch 生命周期；query rows 仍在 `Rows.Close` 时延迟提交 branch。 |
+| XA resource 契约测试 | 新增共享 contract coverage，覆盖 supported XA resource factory、resource/classifier 注册、未知 DB type 拒绝、通用 recovery-scan flag 行为、transaction-timeout 默认值、`IsSameRM` 和 `XAResourcePrepareStatus` 能力边界。 |
 | Datasource resource group | `DBResource.GetResourceGroupId` 现在返回当前 RM transaction service group，不再运行时 panic，使 datasource resource 接口与 RM 注册契约保持一致。 |
 | 厂商 adapter | 新增 `RegisterSeataXADriver` 和 `SeataDriverDescriptor`，应用可以注册外部 `database/sql/driver.Driver`，无需把厂商 driver 加入 Seata Go 直接依赖。 |
 | 达梦原型 | 新增 `types.DBTypeDM` 和基于 `DBMS_XA` 的 XA resource 原型，覆盖 XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析与 rows 清理、错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和文档。 |
@@ -48,6 +49,7 @@ go test ./pkg/datasource/sql/types -run 'DBType|ParseDBType|IndexConstants' -v
 go test ./pkg/protocol/branch ./pkg/protocol/codec -run 'TestBranchStatus|TestBranchReportRequestCodec' -v
 go test ./pkg/rm/remoting/grpc -run 'TestGetGrpcRMRemotingInstance|TestGrpcRMRemotingBranchRegisterXAType|TestGrpcRMRemotingBranchReportReadonlyStatus' -v
 go test ./pkg/remoting/grpc ./pkg/remoting/processor/client
+go test ./pkg/datasource/sql/xa -run 'TestXAResource' -v
 go test ./pkg/datasource/sql/xa -run 'Postgres|MariaDB|Oracle|DM' -v
 go test ./pkg/datasource/sql/xa -run 'TestPostgresXAConn_Recover|TestPostgresXAErrorClassifierIsAlreadyEnded' -v
 go test ./pkg/datasource/sql/xa -run 'TestOracleXAConnRecover|TestOracleXARecoverFallsBackToPrepare|TestDMXAConnRecover|TestDMXARecoverFallsBackToPrepare' -v
@@ -97,6 +99,7 @@ rollback branch、recover 可见性与清理，以及 readonly prepare 返回 `X
 | Oracle/DM version probing | Oracle 和达梦 resource 初始化跳过 MySQL 风格 `SELECT VERSION()` 探测；它们的连接保活策略不依赖解析服务端版本，部分 driver 也不接受该查询。 |
 | XA 连接保活策略 | `DBResource.checkDbVersion` 统一决定是否保活：MySQL 8.0.29 之前版本、MariaDB、Oracle 和达梦保留 prepared 连接；MySQL 8.0.29+ 和 PostgreSQL 不再仅因 DBType 已知而强制保活。 |
 | Prepared statement XA 生命周期 | 带 context 的 prepared statement 在执行时进入 XA branch 生命周期，而不是在 prepare 时提交；prepared query rows 继续保持 close-time branch commit 行为。 |
+| XA resource 契约 | MySQL、PostgreSQL、MariaDB、Oracle 和达梦均有共享 factory/resource/classifier 契约测试覆盖；unsupported DB type 保持默认 no-op classifier，并返回明确 resource factory 错误。 |
 | Datasource resource group | `DBResource.GetResourceGroupId` 跟随 `rm.GetRmConfig().TxServiceGroup`，`rm.Resource` 必需方法可安全调用，并与 RM 注册请求使用的 transaction service group 保持一致。 |
 | PostgreSQL 二阶段幂等 | PostgreSQL SQLSTATE `42704` 和 `55000` 已分类为 already-ended 错误，重复或延迟二阶段失败时可按 RM 契约缓存 committed/rollbacked 状态。 |
 | 只读 prepare 状态 | 普通协议枚举已补 `BranchStatusPhaseoneReadonly = 13`，与已有 gRPC `PhaseOne_RDONLY` 值对齐；普通 codec 和 gRPC branch-report request 覆盖均保留 readonly 状态。 |
