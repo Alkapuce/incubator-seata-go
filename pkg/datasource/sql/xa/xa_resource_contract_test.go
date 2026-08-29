@@ -104,23 +104,15 @@ func TestXAResourceFactoriesRejectUnknownDBTypes(t *testing.T) {
 }
 
 func TestXAResourceCommonContract(t *testing.T) {
-	tests := []struct {
-		name                 string
-		resource             XAResource
-		wantPrepareStatusAPI bool
-	}{
-		{name: "mysql", resource: &MysqlXAConn{}, wantPrepareStatusAPI: false},
-		{name: "postgres", resource: &PostgresXAConn{}, wantPrepareStatusAPI: false},
-		{name: "mariadb", resource: &MariaDBXAConn{}, wantPrepareStatusAPI: false},
-		{name: "oracle", resource: &OracleXAConn{}, wantPrepareStatusAPI: true},
-		{name: "dm", resource: &DMXAConn{}, wantPrepareStatusAPI: true},
-	}
-
-	for _, tt := range tests {
+	for _, tt := range xaResourceContractCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			xids, err := tt.resource.Recover(ctx, TMEndRScan)
+			xids, err := tt.resource.Recover(ctx, TMNoFlags)
+			assert.NoError(t, err)
+			assert.Nil(t, xids)
+
+			xids, err = tt.resource.Recover(ctx, TMEndRScan)
 			assert.NoError(t, err)
 			assert.Nil(t, xids)
 
@@ -135,5 +127,41 @@ func TestXAResourceCommonContract(t *testing.T) {
 			_, ok := tt.resource.(XAResourcePrepareStatus)
 			assert.Equal(t, tt.wantPrepareStatusAPI, ok)
 		})
+	}
+}
+
+func TestXAResourceRejectsInvalidLifecycleFlags(t *testing.T) {
+	for _, tt := range xaResourceContractCases() {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			assert.ErrorContains(t, tt.resource.Start(ctx, "xid", TMSuccess), "invalid arguments")
+			assert.ErrorContains(t, tt.resource.Start(ctx, "xid", TMFail), "invalid arguments")
+			assert.ErrorContains(t, tt.resource.End(ctx, "xid", TMNoFlags), "invalid arguments")
+			assert.ErrorContains(t, tt.resource.End(ctx, "xid", TMJoin), "invalid arguments")
+			xids, err := tt.resource.Recover(ctx, TMJoin)
+			assert.Nil(t, xids)
+			assert.ErrorContains(t, err, "invalid arguments")
+
+			xids, err = tt.resource.Recover(ctx, TMOnePhase)
+			assert.Nil(t, xids)
+			assert.ErrorContains(t, err, "invalid arguments")
+		})
+	}
+}
+
+type xaResourceContractCase struct {
+	name                 string
+	resource             XAResource
+	wantPrepareStatusAPI bool
+}
+
+func xaResourceContractCases() []xaResourceContractCase {
+	return []xaResourceContractCase{
+		{name: "mysql", resource: &MysqlXAConn{}, wantPrepareStatusAPI: false},
+		{name: "postgres", resource: &PostgresXAConn{}, wantPrepareStatusAPI: false},
+		{name: "mariadb", resource: &MariaDBXAConn{}, wantPrepareStatusAPI: false},
+		{name: "oracle", resource: &OracleXAConn{}, wantPrepareStatusAPI: true},
+		{name: "dm", resource: &DMXAConn{}, wantPrepareStatusAPI: true},
 	}
 }
