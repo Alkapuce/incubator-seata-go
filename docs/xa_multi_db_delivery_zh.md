@@ -19,6 +19,9 @@
 
 本文汇总 XA 多数据库支持的本地交付范围，以及提交 Apache PR 前需要完成的检查。
 
+提交 PR 前，使用 [`xa_multi_db_pr_readiness_zh.md`](./xa_multi_db_pr_readiness_zh.md)
+逐项核对原始要求、实现证据、验证命令和剩余边界。
+
 ## 已实现范围
 
 | 范围 | 状态 |

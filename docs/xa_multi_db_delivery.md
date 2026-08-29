@@ -19,6 +19,9 @@
 
 This document summarizes the local delivery scope for XA multi-database support and the checks to complete before proposing Apache pull requests.
 
+Use [`xa_multi_db_pr_readiness.md`](./xa_multi_db_pr_readiness.md) as the
+pre-PR requirement-to-evidence checklist.
+
 ## Implemented Scope
 
 | Area | Status |
