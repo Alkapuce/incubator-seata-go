@@ -410,6 +410,31 @@ func TestParseResourceIDRedactsCredentials(t *testing.T) {
 			},
 		},
 		{
+			name:     "non credential key contains credential word",
+			dsn:      "host=vendor-host password_hint=rotate-before-demo dbname=seata_demo",
+			expected: "host=vendor-host password_hint=rotate-before-demo dbname=seata_demo",
+		},
+		{
+			name:     "quoted non credential values keep separators",
+			dsn:      "user=vendor password=secret host='vendor host;primary' dbname='seata demo'",
+			expected: "host='vendor host;primary' dbname='seata demo'",
+			redacted: []string{
+				"user=vendor",
+				"password=secret",
+				"secret",
+			},
+		},
+		{
+			name:     "escaped non credential value keeps separators",
+			dsn:      `username=vendor passwd=secret application_name=xa\ client\;readonly host=vendor-host`,
+			expected: `application_name=xa\ client\;readonly host=vendor-host`,
+			redacted: []string{
+				"username=vendor",
+				"passwd=secret",
+				"secret",
+			},
+		},
+		{
 			name:     "vendor opaque",
 			dsn:      "user:secret@vendor-host:1521/service?connectTimeout=5",
 			expected: "vendor-host:1521/service",

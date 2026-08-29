@@ -35,7 +35,7 @@
 | XA prepared statement | `XAConn.PrepareContext` 返回的 statement 在执行 `StmtExecContext` / `StmtQueryContext` 时进入与直接 `ExecContext` / `QueryContext` 相同的 XA branch 生命周期；query rows 仍在 `Rows.Close` 时延迟提交 branch。 |
 | XA resource 契约测试 | 新增共享 contract coverage，覆盖 supported XA resource factory、resource/classifier 注册、未知 DB type 拒绝、通用 recovery-scan flag 行为、非法 lifecycle flag 拒绝、transaction-timeout 默认值、`IsSameRM` 和 `XAResourcePrepareStatus` 能力边界。 |
 | Datasource resource group | `DBResource.GetResourceGroupId` 现在返回当前 RM transaction service group，不再运行时 panic，使 datasource resource 接口与 RM 注册契约保持一致。 |
-| 厂商 adapter | 新增 `RegisterSeataXADriver` 和 `SeataDriverDescriptor`，应用可以注册外部 `database/sql/driver.Driver`，无需把厂商 driver 加入 Seata Go 直接依赖；测试覆盖 DBType 必填校验、显式和默认 target name、parse error 传播时不额外拼接原始 DSN、重复注册错误，以及 RM resource ID 中的凭据脱敏，包括 URL、userinfo 前缀和 key-value DSN 形式。 |
+| 厂商 adapter | 新增 `RegisterSeataXADriver` 和 `SeataDriverDescriptor`，应用可以注册外部 `database/sql/driver.Driver`，无需把厂商 driver 加入 Seata Go 直接依赖；测试覆盖 DBType 必填校验、显式和默认 target name、parse error 传播时不额外拼接原始 DSN、重复注册错误，以及 RM resource ID 中的凭据脱敏，包括 URL、userinfo 前缀、key-value DSN、SSL 敏感字段和非凭据字段保留场景。 |
 | 达梦原型 | 新增 `types.DBTypeDM` 和基于 `DBMS_XA` 的 XA resource 原型，覆盖 XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析与 rows 清理、错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和文档。 |
 | Kingbase 与 Oscar | 已记录扩展方向和待确认问题。Kingbase 优先按 PostgreSQL prepared transaction 路径验证；Oscar 需要先确认公开 Go driver、XA API、recover 和错误码。 |
 
@@ -106,7 +106,7 @@ rollback branch、recover 可见性与清理，以及 readonly prepare 返回 `X
 | gRPC XA 分支类型 | `BranchTypeProto` 已显式包含 `XA = 3`，与 XA 分支注册、上报、提交和回滚消息使用的普通协议 `BranchTypeXA` 值对齐；gRPC branch-register、branch-report 和 branch-end processor 测试均覆盖 XA 映射。 |
 | License header | 新增 Go 和 Markdown 文件均包含 Apache Software Foundation license header。 |
 | 生成文件 | `dbtype_string.go` 已随 DB type 测试同步更新。 |
-| 敏感信息 | 文档示例使用占位值，不应包含真实 DSN、密码、wallet 或私有部署信息；生成 RM resource ID 时会在注册前去除 URL userinfo、MySQL/vendor 风格的 `user:password@` 前缀，以及 `user=`、`password=`、`sslpassword=`、`passfile=` 和 SSL key/certificate 路径等 key-value 字段。 |
+| 敏感信息 | 文档示例使用占位值，不应包含真实 DSN、密码、wallet 或私有部署信息；生成 RM resource ID 时会在注册前去除 URL userinfo、MySQL/vendor 风格的 `user:password@` 前缀，以及 `user=`、`password=`、`sslpassword=`、`passfile=` 和 SSL key/certificate 路径等 key-value 字段，同时保留用于稳定识别 resource 的非凭据 key-value 字段。 |
 
 ## 建议 PR 拆分
 
