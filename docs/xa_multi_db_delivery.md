@@ -47,7 +47,7 @@ Run the following checks before sending or updating the pull requests:
 git diff --check
 go test ./pkg/datasource/sql/types -run 'DBType|ParseDBType|IndexConstants' -v
 go test ./pkg/protocol/branch ./pkg/protocol/codec -run 'TestBranchStatus|TestBranchReportRequestCodec' -v
-go test ./pkg/rm/remoting/grpc -run 'TestGetGrpcRMRemotingInstance|TestGrpcRMRemotingBranchRegisterXAType|TestGrpcRMRemotingBranchReportReadonlyStatus' -v
+go test ./pkg/rm/remoting/getty ./pkg/rm/remoting/grpc -v
 go test ./pkg/remoting/grpc ./pkg/remoting/processor/client
 go test ./pkg/datasource/sql/xa -run 'TestXAResource' -v
 go test ./pkg/datasource/sql/xa -run 'Postgres|MariaDB|Oracle|DM' -v
@@ -107,7 +107,7 @@ adding go-ora to the project dependency graph.
 | Datasource resource group | `DBResource.GetResourceGroupId` follows `rm.GetRmConfig().TxServiceGroup`, so the required `rm.Resource` method is safe to call and remains consistent with the transaction service group used by RM registration requests. |
 | PostgreSQL phase-two idempotency | PostgreSQL SQLSTATE `42704` and `55000` are classified as already-ended errors, so duplicate or late phase-two failures can cache committed/rollbacked status consistently with the RM contract. |
 | Readonly prepare status | The protocol enum now includes `BranchStatusPhaseoneReadonly = 13`, matching the existing gRPC `PhaseOne_RDONLY` value; normal codec and gRPC branch-report request coverage both preserve the readonly status. |
-| XA branch type over remoting | `BranchTypeProto` now explicitly includes `XA = 3`, matching the normal protocol `BranchTypeXA` value used by XA branch register, report, commit, and rollback messages; gRPC branch-register, gRPC branch-report, gRPC branch-end, and Getty branch-end processor tests cover the XA mapping. |
+| XA branch type over remoting | `BranchTypeProto` now explicitly includes `XA = 3`, matching the normal protocol `BranchTypeXA` value used by XA branch register, report, commit, and rollback messages; gRPC branch-register/report, Getty branch-register/report/global-lock-query outbound request, and gRPC/Getty branch-end processor tests cover the XA mapping. |
 | License headers | New Go and Markdown files include the Apache Software Foundation license header. |
 | Generated files | `dbtype_string.go` is updated together with DB type tests. |
 | Secrets | Documentation examples use placeholders and must not include real DSNs, passwords, wallets, or private deployment details; generated RM resource IDs strip URL userinfo, MySQL/vendor-style `user:password@` prefixes, and credential-like key-value fields such as `user=`, `password=`, `sslpassword=`, `passfile=`, and SSL key/certificate paths before registration, while preserving non-credential key-value fields used for stable resource identity; RM branch-end processor logs record `applicationData` length instead of the payload. |
