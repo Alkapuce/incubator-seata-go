@@ -476,7 +476,8 @@ func splitResourceIDFields(resourceID string) []string {
 
 func isCredentialResourceIDKey(key string) bool {
 	switch strings.ToLower(key) {
-	case "user", "username", "password", "passwd":
+	case "user", "username", "password", "passwd", "sslpassword", "passfile",
+		"sslkey", "sslcert", "sslrootcert":
 		return true
 	default:
 		return false

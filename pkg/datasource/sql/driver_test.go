@@ -385,6 +385,31 @@ func TestParseResourceIDRedactsCredentials(t *testing.T) {
 			},
 		},
 		{
+			name:     "postgres keyword ssl credentials",
+			dsn:      "host=127.0.0.1 dbname=seata_demo sslmode=verify-full sslpassword=secret passfile=/tmp/pgpass sslkey=/tmp/client.key sslcert=/tmp/client.crt sslrootcert=/tmp/ca.crt",
+			expected: "host=127.0.0.1 dbname=seata_demo sslmode=verify-full",
+			redacted: []string{
+				"sslpassword=secret",
+				"passfile=/tmp/pgpass",
+				"sslkey=/tmp/client.key",
+				"sslcert=/tmp/client.crt",
+				"sslrootcert=/tmp/ca.crt",
+				"secret",
+			},
+		},
+		{
+			name:     "case insensitive key value credentials",
+			dsn:      "HOST=vendor-host DATABASE=service USERNAME=vendor PASSWD=secret SSLPASSWORD=ssl-secret",
+			expected: "HOST=vendor-host DATABASE=service",
+			redacted: []string{
+				"USERNAME=vendor",
+				"PASSWD=secret",
+				"SSLPASSWORD=ssl-secret",
+				"secret",
+				"ssl-secret",
+			},
+		},
+		{
 			name:     "vendor opaque",
 			dsn:      "user:secret@vendor-host:1521/service?connectTimeout=5",
 			expected: "vendor-host:1521/service",
