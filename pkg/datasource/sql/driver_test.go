@@ -213,3 +213,60 @@ func TestRegisterSeataXADriverRejectsInvalidDescriptor(t *testing.T) {
 		Target: mock.NewMockTestDriver(gomock.NewController(t)),
 	}))
 }
+
+func TestRegisterSeataXADriverUsesDBTypeAsDefaultTargetName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMgr := initMockResourceManager(branch.BranchTypeXA, ctrl)
+	_ = mockMgr
+
+	mockDriver := mock.NewMockTestDriver(ctrl)
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockDriver.EXPECT().Open("opaque-dsn").AnyTimes().Return(mockConn, nil)
+	mockConn.EXPECT().Close().AnyTimes().Return(nil)
+
+	driverName := fmt.Sprintf("seata-xa-vendor-default-target-%d", time.Now().UnixNano())
+	err := RegisterSeataXADriver(driverName, SeataDriverDescriptor{
+		DBType: types.DBTypeOracle,
+		Target: mockDriver,
+		ParseDBName: func(string) (string, error) {
+			return "vendor_db", nil
+		},
+	})
+	assert.NoError(t, err)
+
+	db, err := sql.Open(driverName, "opaque-dsn")
+	assert.NoError(t, err)
+	defer db.Close()
+
+	v := reflect.ValueOf(db)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	field := v.FieldByName("connector")
+	fieldVal := reflectx.GetUnexportedField(field)
+	connector, ok := fieldVal.(*seataXAConnector)
+	assert.True(t, ok, "need return seata xa connector")
+	assert.Equal(t, types.DBTypeOracle.String(), connector.targetName)
+}
+
+func TestRegisterSeataXADriverReturnsDuplicateRegistrationError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	driverName := fmt.Sprintf("seata-xa-vendor-duplicate-%d", time.Now().UnixNano())
+	descriptor := SeataDriverDescriptor{
+		DBType: types.DBTypeOracle,
+		Target: mock.NewMockTestDriver(ctrl),
+		ParseDBName: func(string) (string, error) {
+			return "vendor_db", nil
+		},
+	}
+
+	assert.NoError(t, RegisterSeataXADriver(driverName, descriptor))
+	err := RegisterSeataXADriver(driverName, descriptor)
+	assert.ErrorContains(t, err, "register seata xa driver")
+	assert.ErrorContains(t, err, driverName)
+}

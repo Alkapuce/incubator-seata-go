@@ -64,6 +64,6 @@ db, err := stdsql.Open("seata-xa-vendor", dsn)
 - Register or implement an XA resource factory for the vendor `DBType`.
 - Provide a stable Seata driver name, for example `seata-xa-vendor`.
 - Parse the database name from the vendor DSN without logging credentials.
-- Add unit tests that prove the wrapper returns an `XAConn` with the expected DB type and database name.
+- Add unit tests that prove the wrapper returns an `XAConn` with the expected DB type, database name, explicit or default target driver name, and duplicate-registration error.
 - Add integration tests for start, end, prepare, commit, rollback, recover, branch-missing behavior, and repeated second-phase callbacks.
 - Document driver version, database version, permissions, recovery behavior, and unsupported XA flags.
