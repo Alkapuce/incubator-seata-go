@@ -19,6 +19,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sync"
 	"testing"
@@ -38,15 +39,23 @@ import (
 type xaProcessorTestRM struct {
 	commitResource   rm.BranchResource
 	rollbackResource rm.BranchResource
+	commitErr        error
+	rollbackErr      error
 }
 
 func (m *xaProcessorTestRM) BranchCommit(ctx context.Context, resource rm.BranchResource) (branch.BranchStatus, error) {
 	m.commitResource = resource
+	if m.commitErr != nil {
+		return branch.BranchStatusUnknown, m.commitErr
+	}
 	return branch.BranchStatusPhasetwoCommitted, nil
 }
 
 func (m *xaProcessorTestRM) BranchRollback(ctx context.Context, resource rm.BranchResource) (branch.BranchStatus, error) {
 	m.rollbackResource = resource
+	if m.rollbackErr != nil {
+		return branch.BranchStatusUnknown, m.rollbackErr
+	}
 	return branch.BranchStatusPhasetwoRollbacked, nil
 }
 
@@ -141,4 +150,54 @@ func TestGrpcBranchProcessorsRouteXAType(t *testing.T) {
 	if assert.True(t, ok) {
 		assert.Equal(t, pb.BranchStatusProto_PhaseTwo_Rollbacked, rollbackResponse.AbstractBranchEndResponse.BranchStatus)
 	}
+}
+
+func TestGettyBranchProcessorsPreserveXAType(t *testing.T) {
+	config.InitTransportConfig(&config.TransportConfig{Protocol: protocol.ProtocolSEATA.String()})
+	testRM := &xaProcessorTestRM{
+		commitErr:   errors.New("stop before commit response"),
+		rollbackErr: errors.New("stop before rollback response"),
+	}
+	rm.GetRmCacheInstance().RegisterResourceManager(testRM)
+	defer rm.GetRmCacheInstance().UnregisterResourceManager(branch.BranchTypeXA)
+
+	commitRequest := message.RpcMessage{
+		ID: 401,
+		Body: message.BranchCommitRequest{
+			AbstractBranchEndRequest: message.AbstractBranchEndRequest{
+				Xid:             "xa-xid",
+				BranchId:        2001,
+				BranchType:      branch.BranchTypeXA,
+				ResourceId:      "xa-resource",
+				ApplicationData: []byte("xa-commit"),
+			},
+		},
+	}
+	err := (&rmBranchCommitProcessor{}).handleGettyBranchCommit(context.Background(), commitRequest)
+	assert.ErrorContains(t, err, "stop before commit response")
+	assert.Equal(t, branch.BranchTypeXA, testRM.commitResource.BranchType)
+	assert.Equal(t, "xa-xid", testRM.commitResource.Xid)
+	assert.EqualValues(t, 2001, testRM.commitResource.BranchId)
+	assert.Equal(t, "xa-resource", testRM.commitResource.ResourceId)
+	assert.Equal(t, []byte("xa-commit"), testRM.commitResource.ApplicationData)
+
+	rollbackRequest := message.RpcMessage{
+		ID: 402,
+		Body: message.BranchRollbackRequest{
+			AbstractBranchEndRequest: message.AbstractBranchEndRequest{
+				Xid:             "xa-xid",
+				BranchId:        2002,
+				BranchType:      branch.BranchTypeXA,
+				ResourceId:      "xa-resource",
+				ApplicationData: []byte("xa-rollback"),
+			},
+		},
+	}
+	err = (&rmBranchRollbackProcessor{}).handleGettyBranchRollback(context.Background(), rollbackRequest)
+	assert.ErrorContains(t, err, "stop before rollback response")
+	assert.Equal(t, branch.BranchTypeXA, testRM.rollbackResource.BranchType)
+	assert.Equal(t, "xa-xid", testRM.rollbackResource.Xid)
+	assert.EqualValues(t, 2002, testRM.rollbackResource.BranchId)
+	assert.Equal(t, "xa-resource", testRM.rollbackResource.ResourceId)
+	assert.Equal(t, []byte("xa-rollback"), testRM.rollbackResource.ApplicationData)
 }

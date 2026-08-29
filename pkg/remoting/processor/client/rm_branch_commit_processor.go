@@ -124,6 +124,7 @@ func (f *rmBranchCommitProcessor) handleGettyBranchCommit(ctx context.Context, r
 	applicationData := request.ApplicationData
 	log.Infof("Branch committing: xid %s, branchID %d, resourceID %s, applicationDataLen %d", xid, branchID, resourceID, len(applicationData))
 	branchResource := rm.BranchResource{
+		BranchType:      request.BranchType,
 		ResourceId:      resourceID,
 		BranchId:        branchID,
 		ApplicationData: applicationData,
