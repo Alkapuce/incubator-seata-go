@@ -137,6 +137,23 @@ func TestMysqlXAConn_LifecycleSQLQuotesXID(t *testing.T) {
 	}
 }
 
+func TestMysqlXAConnExecFallsBackToPrepare(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockStmt := mock.NewMockTestDriverStmt(ctrl)
+	mockConn.EXPECT().ExecContext(gomock.Any(), "XA PREPARE 'xid'", gomock.Any()).Return(nil, driver.ErrSkip)
+	mockConn.EXPECT().PrepareContext(gomock.Any(), "XA PREPARE 'xid'").Return(mockStmt, nil)
+	mockStmt.EXPECT().ExecContext(gomock.Any(), gomock.Any()).Return(&driver.ResultNoRows, nil)
+	mockStmt.EXPECT().Close().Return(nil)
+
+	conn := &MysqlXAConn{Conn: mockConn}
+	if err := conn.XAPrepare(context.Background(), "xid"); err != nil {
+		t.Fatalf("XAPrepare() error = %v", err)
+	}
+}
+
 func TestMysqlXAConn_End(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -322,6 +339,31 @@ func TestMysqlXAConn_Recover(t *testing.T) {
 				t.Errorf("Recover() did not close rows")
 			}
 		})
+	}
+}
+
+func TestMysqlXAConnRecoverFallsBackToPrepare(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockStmt := mock.NewMockTestDriverStmt(ctrl)
+	rows := &mysqlMockRows{data: [][]interface{}{{1, 3, 0, "xid"}}}
+	mockConn.EXPECT().QueryContext(gomock.Any(), "XA RECOVER", gomock.Any()).Return(nil, driver.ErrSkip)
+	mockConn.EXPECT().PrepareContext(gomock.Any(), "XA RECOVER").Return(mockStmt, nil)
+	mockStmt.EXPECT().QueryContext(gomock.Any(), gomock.Any()).Return(rows, nil)
+	mockStmt.EXPECT().Close().Return(nil)
+
+	conn := &MysqlXAConn{Conn: mockConn}
+	got, err := conn.Recover(context.Background(), TMStartRScan)
+	if err != nil {
+		t.Fatalf("Recover() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, []string{"xid"}) {
+		t.Fatalf("Recover() got = %v, want %v", got, []string{"xid"})
+	}
+	if !rows.closed {
+		t.Fatalf("Recover() did not close rows")
 	}
 }
 

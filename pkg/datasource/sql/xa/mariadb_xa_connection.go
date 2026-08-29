@@ -28,6 +28,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/types"
+	"seata.apache.org/seata-go/v2/pkg/datasource/sql/util"
 	"seata.apache.org/seata-go/v2/pkg/util/log"
 )
 
@@ -80,8 +81,7 @@ func (c *MariaDBXAConn) Commit(ctx context.Context, xid string, onePhase bool) e
 		query += " ONE PHASE"
 	}
 
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, query, nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, query, nil)
 	if err != nil {
 		log.Errorf("mariadb xa branch commit failed, xid %s, err %v", xid, err)
 	}
@@ -100,8 +100,7 @@ func (c *MariaDBXAConn) End(ctx context.Context, xid string, flags int) error {
 		return errors.New("invalid arguments")
 	}
 
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, query, nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, query, nil)
 	if err != nil {
 		log.Errorf("mariadb xa branch end failed, xid %s, err %v", xid, err)
 	}
@@ -123,8 +122,7 @@ func (c *MariaDBXAConn) IsSameRM(ctx context.Context, xares XAResource) bool {
 func (c *MariaDBXAConn) XAPrepare(ctx context.Context, xid string) error {
 	log.Infof("mariadb xa branch prepare, xid %s", xid)
 
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, "XA PREPARE "+quoteMySQLXID(xid), nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, "XA PREPARE "+quoteMySQLXID(xid), nil)
 	if err != nil {
 		log.Errorf("mariadb xa branch prepare failed, xid %s, err %v", xid, err)
 	}
@@ -142,8 +140,7 @@ func (c *MariaDBXAConn) Recover(ctx context.Context, flag int) (xids []string, e
 		return nil, nil
 	}
 
-	conn := c.Conn.(driver.QueryerContext)
-	rows, err := conn.QueryContext(ctx, "XA RECOVER", nil)
+	rows, err := util.CtxDriverQueryWithPrepareFallback(ctx, c.Conn, "XA RECOVER", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +169,7 @@ func (c *MariaDBXAConn) Recover(ctx context.Context, flag int) (xids []string, e
 func (c *MariaDBXAConn) Rollback(ctx context.Context, xid string) error {
 	log.Infof("mariadb xa branch rollback, xid %s", xid)
 
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, "XA ROLLBACK "+quoteMySQLXID(xid), nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, "XA ROLLBACK "+quoteMySQLXID(xid), nil)
 	if err != nil {
 		log.Errorf("mariadb xa branch rollback failed, xid %s, err %v", xid, err)
 	}
@@ -198,8 +194,7 @@ func (c *MariaDBXAConn) Start(ctx context.Context, xid string, flags int) error 
 		return errors.New("invalid arguments")
 	}
 
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, query, nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, query, nil)
 	if err != nil {
 		log.Errorf("mariadb xa branch start failed, xid %s, err %v", xid, err)
 	}

@@ -33,15 +33,19 @@ import (
 )
 
 type mariaDBMockRows struct {
-	idx  int
-	data [][]interface{}
+	idx    int
+	closed bool
+	data   [][]interface{}
 }
 
 func (m *mariaDBMockRows) Columns() []string {
 	return []string{"formatID", "gtrid_length", "bqual_length", "data"}
 }
 
-func (m *mariaDBMockRows) Close() error { return nil }
+func (m *mariaDBMockRows) Close() error {
+	m.closed = true
+	return nil
+}
 
 func (m *mariaDBMockRows) Next(dest []driver.Value) error {
 	if m.idx == len(m.data) {
@@ -151,6 +155,21 @@ func TestMariaDBXAConnLifecycleSQL(t *testing.T) {
 	}
 }
 
+func TestMariaDBXAConnExecFallsBackToPrepare(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockStmt := mock.NewMockTestDriverStmt(ctrl)
+	mockConn.EXPECT().ExecContext(gomock.Any(), "XA PREPARE 'xid'", gomock.Any()).Return(nil, driver.ErrSkip)
+	mockConn.EXPECT().PrepareContext(gomock.Any(), "XA PREPARE 'xid'").Return(mockStmt, nil)
+	mockStmt.EXPECT().ExecContext(gomock.Any(), gomock.Any()).Return(&driver.ResultNoRows, nil)
+	mockStmt.EXPECT().Close().Return(nil)
+
+	conn := &MariaDBXAConn{Conn: mockConn}
+	assert.NoError(t, conn.XAPrepare(context.Background(), "xid"))
+}
+
 func TestMariaDBXAConnRejectsInvalidFlags(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -176,6 +195,25 @@ func TestMariaDBXAConnRecover(t *testing.T) {
 	got, err := conn.Recover(context.Background(), TMStartRScan|TMEndRScan)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"xid", "another_xid"}, got)
+}
+
+func TestMariaDBXAConnRecoverFallsBackToPrepare(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockStmt := mock.NewMockTestDriverStmt(ctrl)
+	rows := &mariaDBMockRows{data: [][]interface{}{{1, 3, 0, "xid"}}}
+	mockConn.EXPECT().QueryContext(gomock.Any(), "XA RECOVER", gomock.Any()).Return(nil, driver.ErrSkip)
+	mockConn.EXPECT().PrepareContext(gomock.Any(), "XA RECOVER").Return(mockStmt, nil)
+	mockStmt.EXPECT().QueryContext(gomock.Any(), gomock.Any()).Return(rows, nil)
+	mockStmt.EXPECT().Close().Return(nil)
+
+	conn := &MariaDBXAConn{Conn: mockConn}
+	got, err := conn.Recover(context.Background(), TMStartRScan)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"xid"}, got)
+	assert.True(t, rows.closed)
 }
 
 func TestMariaDBXAConnRecoverFlags(t *testing.T) {

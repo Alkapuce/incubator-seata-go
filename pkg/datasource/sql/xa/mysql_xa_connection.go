@@ -28,6 +28,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/types"
+	"seata.apache.org/seata-go/v2/pkg/datasource/sql/util"
 	"seata.apache.org/seata-go/v2/pkg/util/log"
 )
 
@@ -93,8 +94,7 @@ func (c *MysqlXAConn) Commit(ctx context.Context, xid string, onePhase bool) err
 		sb.WriteString(" ONE PHASE")
 	}
 
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, sb.String(), nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, sb.String(), nil)
 	if err != nil {
 		log.Errorf("xa branch commit failed, xid %s, err %v", xid, err)
 	}
@@ -120,8 +120,7 @@ func (c *MysqlXAConn) End(ctx context.Context, xid string, flags int) error {
 		return errors.New("invalid arguments")
 	}
 
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, sb.String(), nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, sb.String(), nil)
 	if err != nil {
 		log.Errorf("xa branch end failed, xid %s, err %v", xid, err)
 	}
@@ -151,8 +150,7 @@ func (c *MysqlXAConn) XAPrepare(ctx context.Context, xid string) error {
 	sb.WriteString("XA PREPARE ")
 	sb.WriteString(quoteMySQLXID(xid))
 
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, sb.String(), nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, sb.String(), nil)
 	if err != nil {
 		log.Errorf("xa branch prepare failed, xid %s, err %v", xid, err)
 	}
@@ -174,8 +172,7 @@ func (c *MysqlXAConn) Recover(ctx context.Context, flag int) (xids []string, err
 		return nil, nil
 	}
 
-	conn := c.Conn.(driver.QueryerContext)
-	res, err := conn.QueryContext(ctx, "XA RECOVER", nil)
+	res, err := util.CtxDriverQueryWithPrepareFallback(ctx, c.Conn, "XA RECOVER", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -208,8 +205,7 @@ func (c *MysqlXAConn) Rollback(ctx context.Context, xid string) error {
 	sb.WriteString("XA ROLLBACK ")
 	sb.WriteString(quoteMySQLXID(xid))
 
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, sb.String(), nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, sb.String(), nil)
 	if err != nil {
 		log.Errorf("xa branch rollback failed, xid %s, err %v", xid, err)
 	}
@@ -240,8 +236,7 @@ func (c *MysqlXAConn) Start(ctx context.Context, xid string, flags int) error {
 		return errors.New("invalid arguments")
 	}
 
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, sb.String(), nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, sb.String(), nil)
 	if err != nil {
 		log.Errorf("xa branch start failed, xid %s, err %v", xid, err)
 	}

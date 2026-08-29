@@ -171,6 +171,25 @@ func TestPostgresXAConnLifecycleSQLQuotesXID(t *testing.T) {
 	}
 }
 
+func TestPostgresXAConnExecFallsBackToPrepare(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockTx := mock.NewMockTestDriverTx(ctrl)
+	mockStmt := mock.NewMockTestDriverStmt(ctrl)
+	mockConn.EXPECT().BeginTx(gomock.Any(), gomock.Any()).Return(mockTx, nil)
+	mockConn.EXPECT().ExecContext(gomock.Any(), "PREPARE TRANSACTION 'xid'", gomock.Any()).Return(nil, driver.ErrSkip)
+	mockConn.EXPECT().PrepareContext(gomock.Any(), "PREPARE TRANSACTION 'xid'").Return(mockStmt, nil)
+	mockStmt.EXPECT().ExecContext(gomock.Any(), gomock.Any()).Return(&driver.ResultNoRows, nil)
+	mockStmt.EXPECT().Close().Return(nil)
+
+	conn := &PostgresXAConn{Conn: mockConn}
+	assert.NoError(t, conn.Start(context.Background(), "xid", TMNoFlags))
+	assert.NoError(t, conn.XAPrepare(context.Background(), "xid"))
+	assert.Nil(t, conn.tx)
+}
+
 func TestPostgresXAConn_Recover(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -184,6 +203,25 @@ func TestPostgresXAConn_Recover(t *testing.T) {
 	got, err := conn.Recover(context.Background(), TMStartRScan|TMEndRScan)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"xid", "another-xid"}, got)
+	assert.True(t, rows.closed)
+}
+
+func TestPostgresXAConnRecoverFallsBackToPrepare(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockStmt := mock.NewMockTestDriverStmt(ctrl)
+	rows := &postgresMockRows{data: [][]interface{}{{"xid"}}}
+	mockConn.EXPECT().QueryContext(gomock.Any(), "SELECT gid FROM pg_prepared_xacts WHERE database = current_database()", gomock.Any()).Return(nil, driver.ErrSkip)
+	mockConn.EXPECT().PrepareContext(gomock.Any(), "SELECT gid FROM pg_prepared_xacts WHERE database = current_database()").Return(mockStmt, nil)
+	mockStmt.EXPECT().QueryContext(gomock.Any(), gomock.Any()).Return(rows, nil)
+	mockStmt.EXPECT().Close().Return(nil)
+
+	conn := &PostgresXAConn{Conn: mockConn}
+	got, err := conn.Recover(context.Background(), TMStartRScan)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"xid"}, got)
 	assert.True(t, rows.closed)
 }
 

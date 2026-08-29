@@ -29,6 +29,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/types"
+	"seata.apache.org/seata-go/v2/pkg/datasource/sql/util"
 	"seata.apache.org/seata-go/v2/pkg/util/log"
 )
 
@@ -125,8 +126,7 @@ func (c *PostgresXAConn) XAPrepare(ctx context.Context, xid string) error {
 	}
 
 	query := "PREPARE TRANSACTION " + quotePostgresXID(xid)
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, query, nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, query, nil)
 	if err != nil {
 		log.Errorf("postgres xa branch prepare failed, xid %s, err %v", xid, err)
 		return err
@@ -156,8 +156,7 @@ func (c *PostgresXAConn) Commit(ctx context.Context, xid string, onePhase bool) 
 	log.Infof("postgres xa branch commit prepared, xid %s", xid)
 
 	query := "COMMIT PREPARED " + quotePostgresXID(xid)
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, query, nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, query, nil)
 	if err != nil {
 		log.Errorf("postgres xa branch commit prepared failed, xid %s, err %v", xid, err)
 	}
@@ -179,8 +178,7 @@ func (c *PostgresXAConn) Rollback(ctx context.Context, xid string) error {
 	log.Infof("postgres xa branch rollback prepared, xid %s", xid)
 
 	query := "ROLLBACK PREPARED " + quotePostgresXID(xid)
-	conn, _ := c.Conn.(driver.ExecerContext)
-	_, err := conn.ExecContext(ctx, query, nil)
+	_, err := util.CtxDriverExecWithPrepareFallback(ctx, c.Conn, query, nil)
 	if err != nil {
 		log.Errorf("postgres xa branch rollback prepared failed, xid %s, err %v", xid, err)
 	}
@@ -198,8 +196,7 @@ func (c *PostgresXAConn) Recover(ctx context.Context, flag int) ([]string, error
 		return nil, nil
 	}
 
-	conn := c.Conn.(driver.QueryerContext)
-	rows, err := conn.QueryContext(ctx, "SELECT gid FROM pg_prepared_xacts WHERE database = current_database()", nil)
+	rows, err := util.CtxDriverQueryWithPrepareFallback(ctx, c.Conn, "SELECT gid FROM pg_prepared_xacts WHERE database = current_database()", nil)
 	if err != nil {
 		return nil, err
 	}
