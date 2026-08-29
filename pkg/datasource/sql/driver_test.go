@@ -204,6 +204,10 @@ func TestRegisterSeataXADriver(t *testing.T) {
 
 func TestRegisterSeataXADriverRejectsInvalidDescriptor(t *testing.T) {
 	assert.Error(t, RegisterSeataXADriver("", SeataDriverDescriptor{}))
+	assert.Error(t, RegisterSeataXADriver("seata-xa-invalid-missing-dbtype", SeataDriverDescriptor{
+		Target:      mock.NewMockTestDriver(gomock.NewController(t)),
+		ParseDBName: func(string) (string, error) { return "db", nil },
+	}))
 	assert.Error(t, RegisterSeataXADriver("seata-xa-invalid-missing-driver", SeataDriverDescriptor{
 		DBType:      types.DBTypeOracle,
 		ParseDBName: func(string) (string, error) { return "db", nil },
@@ -250,6 +254,28 @@ func TestRegisterSeataXADriverUsesDBTypeAsDefaultTargetName(t *testing.T) {
 	connector, ok := fieldVal.(*seataXAConnector)
 	assert.True(t, ok, "need return seata xa connector")
 	assert.Equal(t, types.DBTypeOracle.String(), connector.targetName)
+}
+
+func TestRegisterSeataXADriverReturnsParseDBNameErrorWithoutDSN(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	driverName := fmt.Sprintf("seata-xa-vendor-parse-error-%d", time.Now().UnixNano())
+	err := RegisterSeataXADriver(driverName, SeataDriverDescriptor{
+		DBType: types.DBTypeOracle,
+		Target: mock.NewMockTestDriver(ctrl),
+		ParseDBName: func(dsn string) (string, error) {
+			assert.Equal(t, "user:secret@vendor-host:1521/service", dsn)
+			return "", fmt.Errorf("bad vendor dsn")
+		},
+	})
+	assert.NoError(t, err)
+
+	db, err := sql.Open(driverName, "user:secret@vendor-host:1521/service")
+	assert.Nil(t, db)
+	assert.ErrorContains(t, err, "parse db name: bad vendor dsn")
+	assert.NotContains(t, err.Error(), "user:secret")
+	assert.NotContains(t, err.Error(), "vendor-host")
 }
 
 func TestRegisterSeataXADriverReturnsDuplicateRegistrationError(t *testing.T) {

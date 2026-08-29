@@ -35,7 +35,7 @@
 | XA prepared statement | `XAConn.PrepareContext` 返回的 statement 在执行 `StmtExecContext` / `StmtQueryContext` 时进入与直接 `ExecContext` / `QueryContext` 相同的 XA branch 生命周期；query rows 仍在 `Rows.Close` 时延迟提交 branch。 |
 | XA resource 契约测试 | 新增共享 contract coverage，覆盖 supported XA resource factory、resource/classifier 注册、未知 DB type 拒绝、通用 recovery-scan flag 行为、非法 lifecycle flag 拒绝、transaction-timeout 默认值、`IsSameRM` 和 `XAResourcePrepareStatus` 能力边界。 |
 | Datasource resource group | `DBResource.GetResourceGroupId` 现在返回当前 RM transaction service group，不再运行时 panic，使 datasource resource 接口与 RM 注册契约保持一致。 |
-| 厂商 adapter | 新增 `RegisterSeataXADriver` 和 `SeataDriverDescriptor`，应用可以注册外部 `database/sql/driver.Driver`，无需把厂商 driver 加入 Seata Go 直接依赖；测试覆盖显式和默认 target name，以及重复注册错误。 |
+| 厂商 adapter | 新增 `RegisterSeataXADriver` 和 `SeataDriverDescriptor`，应用可以注册外部 `database/sql/driver.Driver`，无需把厂商 driver 加入 Seata Go 直接依赖；测试覆盖 DBType 必填校验、显式和默认 target name、parse error 传播时不额外拼接原始 DSN，以及重复注册错误。 |
 | 达梦原型 | 新增 `types.DBTypeDM` 和基于 `DBMS_XA` 的 XA resource 原型，覆盖 XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析与 rows 清理、错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和文档。 |
 | Kingbase 与 Oscar | 已记录扩展方向和待确认问题。Kingbase 优先按 PostgreSQL prepared transaction 路径验证；Oscar 需要先确认公开 Go driver、XA API、recover 和错误码。 |
 

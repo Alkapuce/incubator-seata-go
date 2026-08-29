@@ -73,7 +73,7 @@ type SeataDriverDescriptor struct {
 }
 
 func (d SeataDriverDescriptor) internal() (driverDescriptor, error) {
-	if d.DBType == types.DBTypeUnknown {
+	if d.DBType <= 0 || d.DBType == types.DBTypeUnknown {
 		return driverDescriptor{}, errors.New("db type is required")
 	}
 	if d.Target == nil {
