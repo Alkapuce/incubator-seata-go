@@ -81,8 +81,8 @@ The prototype maps Seata branch XIDs to `DBMS_XA_XID(formatid, gtrid, bqual)`:
 - Confirm the driver source, license, and redistribution terms before adding it
   to any Apache repository dependency.
 - Validate `XA_RECOVER`, branch-missing behavior, duplicate second-phase
-  callbacks, and invalid XID errors against a real Dameng database before using
-  the prototype in production.
+  callbacks, and invalid XID errors against a real Dameng database before
+  describing the prototype as supported or enabling production traffic.
 
 See [Dameng XA Validation Checklist](./xa_dm_validation.md) for the required
 real-driver and real-database validation items.
@@ -109,6 +109,7 @@ go test ./pkg/datasource/sql/...
 | --- | --- |
 | Real database validation | Not completed in this repository yet. |
 | Driver dependency | Not added to `go.mod`; applications register the driver externally. |
+| Support level | Prototype only until the real-driver and real-database checklist is complete. |
 | Compatibility mode | `DBMS_XA` availability must be verified against the target Dameng deployment; Dameng documents that MySQL-compatible XA mode does not use the `DBMS_XA` package. |
 | PL/SQL and recover shape | The prototype uses Oracle-like anonymous blocks and a `TABLE(DBMS_XA.XA_RECOVER())` query shape; both must be checked against the selected Dameng version and driver. |
 | Readonly prepare reporting | The Go side reads `DBMS_XA.XA_PREPARE` through an output bind and reports `BranchStatusPhaseoneReadonly` when `XA_RDONLY` is returned; this bind behavior still needs real-driver validation. |

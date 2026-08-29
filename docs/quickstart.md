@@ -340,7 +340,7 @@ if err != nil {
 db, err := sql.Open("seata-xa-dm", dsn)
 ```
 
-> The Dameng XA path is a DBMS_XA-based prototype. Validate driver licensing, compatibility mode, recovery output, and error codes against a real Dameng database before production use.
+> The Dameng XA path is a DBMS_XA-based prototype. Validate driver licensing, compatibility mode, recovery output, and error codes against a real Dameng database before describing it as supported or enabling production traffic.
 
 > MariaDB-specific setup and troubleshooting: [MariaDB XA Guide](./xa_mariadb.md).
 > Oracle-specific setup and troubleshooting: [Oracle XA Guide](./xa_oracle.md).

@@ -340,7 +340,7 @@ if err != nil {
 db, err := sql.Open("seata-xa-dm", dsn)
 ```
 
-> 达梦 XA 路径是基于 DBMS_XA 的原型。正式使用前，需要在真实达梦数据库上验证 driver 许可证、兼容模式、recover 输出和错误码。
+> 达梦 XA 路径是基于 DBMS_XA 的原型。声明 supported 或接入生产流量前，需要在真实达梦数据库上验证 driver 许可证、兼容模式、recover 输出和错误码。
 
 > MariaDB 专属配置和排查说明：[MariaDB XA 使用指南](./xa_mariadb_zh.md)。
 > Oracle 专属配置和排查说明：[Oracle XA 使用指南](./xa_oracle_zh.md)。
