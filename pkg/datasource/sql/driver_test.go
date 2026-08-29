@@ -365,6 +365,26 @@ func TestParseResourceIDRedactsCredentials(t *testing.T) {
 			},
 		},
 		{
+			name:     "postgres keyword",
+			dsn:      "user=postgres password=secret host=127.0.0.1 port=5432 dbname=seata_demo sslmode=disable",
+			expected: "host=127.0.0.1 port=5432 dbname=seata_demo sslmode=disable",
+			redacted: []string{
+				"user=postgres",
+				"password=secret",
+				"secret",
+			},
+		},
+		{
+			name:     "postgres keyword quoted",
+			dsn:      "user='postgres user' password='se cret' host=127.0.0.1 dbname=seata_demo",
+			expected: "host=127.0.0.1 dbname=seata_demo",
+			redacted: []string{
+				"user='postgres user'",
+				"password='se cret'",
+				"se cret",
+			},
+		},
+		{
 			name:     "vendor opaque",
 			dsn:      "user:secret@vendor-host:1521/service?connectTimeout=5",
 			expected: "vendor-host:1521/service",
@@ -386,6 +406,16 @@ func TestParseResourceIDRedactsCredentials(t *testing.T) {
 			name:     "no credentials",
 			dsn:      "tcp(127.0.0.1:3306)/seata_demo?multiStatements=true",
 			expected: "tcp(127.0.0.1:3306)/seata_demo",
+		},
+		{
+			name:     "semicolon separated key value",
+			dsn:      "username=vendor;passwd=secret;host=vendor-host;database=service",
+			expected: "host=vendor-host database=service",
+			redacted: []string{
+				"username=vendor",
+				"passwd=secret",
+				"secret",
+			},
 		},
 	}
 

@@ -392,6 +392,7 @@ func parseResourceID(dsn string) string {
 	}
 	res = redactURLUserInfo(res)
 	res = redactDSNUserInfo(res)
+	res = redactKeyValueCredentials(res)
 	return strings.ReplaceAll(res, ",", "|")
 }
 
@@ -414,6 +415,72 @@ func redactDSNUserInfo(resourceID string) string {
 		return resourceID
 	}
 	return resourceID[at+1:]
+}
+
+func redactKeyValueCredentials(resourceID string) string {
+	if !strings.Contains(resourceID, "=") {
+		return resourceID
+	}
+	fields := splitResourceIDFields(resourceID)
+	if len(fields) == 0 {
+		return resourceID
+	}
+
+	kept := make([]string, 0, len(fields))
+	for _, field := range fields {
+		key, _, ok := strings.Cut(field, "=")
+		if !ok || !isCredentialResourceIDKey(strings.TrimSpace(key)) {
+			kept = append(kept, field)
+		}
+	}
+	if len(kept) == len(fields) {
+		return resourceID
+	}
+	return strings.Join(kept, " ")
+}
+
+func splitResourceIDFields(resourceID string) []string {
+	var fields []string
+	start := -1
+	inQuote := false
+	escaped := false
+	for i, r := range resourceID {
+		if start < 0 {
+			if r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == ';' {
+				continue
+			}
+			start = i
+		}
+		if escaped {
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+		if r == '\'' {
+			inQuote = !inQuote
+			continue
+		}
+		if !inQuote && (r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == ';') {
+			fields = append(fields, strings.TrimSpace(resourceID[start:i]))
+			start = -1
+		}
+	}
+	if start >= 0 {
+		fields = append(fields, strings.TrimSpace(resourceID[start:]))
+	}
+	return fields
+}
+
+func isCredentialResourceIDKey(key string) bool {
+	switch strings.ToLower(key) {
+	case "user", "username", "password", "passwd":
+		return true
+	default:
+		return false
+	}
 }
 
 func selectDBVersion(ctx context.Context, conn driver.Conn) (string, error) {
