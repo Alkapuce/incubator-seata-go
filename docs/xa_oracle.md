@@ -125,7 +125,7 @@ Oracle validation must record:
 
 | Behavior | Notes |
 | --- | --- |
-| `TMNoFlags` on `Start` | Sent as Oracle loose branch flag to match Seata Java behavior. |
+| `TMNoFlags` on `Start` | Sent to `DBMS_XA.XA_START` as `TMNOFLAGS`; Oracle's JDBC loose-branch flag is not accepted by the direct `DBMS_XA` package call path. |
 | `TMFail` on `End` | Mapped internally to `TMSuccess` before rollback because Oracle `DBMS_XA.XA_END` does not accept `TMFAIL` in this implementation path. |
 | `XAPrepare` readonly | Reads the `DBMS_XA.XA_PREPARE` return code, treats both `XA_OK` and `XA_RDONLY` as successful prepare results, and reports `BranchStatusPhaseoneReadonly` upstream when `XA_RDONLY` is returned. Real driver output-bind behavior still needs database validation. |
 | Recovery scan | Uses `TABLE(DBMS_XA.XA_RECOVER())` and converts `formatid/gtrid/bqual` back to Seata branch XID strings. |

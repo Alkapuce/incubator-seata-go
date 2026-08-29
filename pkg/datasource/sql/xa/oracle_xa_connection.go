@@ -145,7 +145,7 @@ func (c *OracleXAConn) SetTransactionTimeout(duration time.Duration) bool { retu
 func oracleXAStartFlag(flags int) (int, error) {
 	switch flags {
 	case TMNoFlags:
-		return oracleXATransLoose, nil
+		return TMNoFlags, nil
 	case TMJoin, TMResume:
 		return flags, nil
 	default:

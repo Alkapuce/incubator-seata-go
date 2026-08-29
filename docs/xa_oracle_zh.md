@@ -114,7 +114,7 @@ go test ./pkg/datasource/sql/...
 
 | 行为 | 说明 |
 | --- | --- |
-| `Start` 的 `TMNoFlags` | 发送为 Oracle loose branch flag，用于对齐 Seata Java 行为。 |
+| `Start` 的 `TMNoFlags` | 作为 `TMNOFLAGS` 传给 `DBMS_XA.XA_START`；Oracle JDBC loose-branch flag 不适用于直接调用 `DBMS_XA` 包的路径。 |
 | `End` 的 `TMFail` | 内部映射为 `TMSuccess` 后再 rollback，因为当前 `DBMS_XA.XA_END` 路径不接受 `TMFAIL`。 |
 | `XAPrepare` 只读结果 | 读取 `DBMS_XA.XA_PREPARE` 返回码；`XA_OK` 和 `XA_RDONLY` 都视为 prepare 成功，返回 `XA_RDONLY` 时向上层上报 `BranchStatusPhaseoneReadonly`。真实 driver 的输出参数绑定行为仍需数据库验证。 |
 | 恢复扫描 | 使用 `TABLE(DBMS_XA.XA_RECOVER())`，再把 `formatid/gtrid/bqual` 转回 Seata branch XID 字符串。 |

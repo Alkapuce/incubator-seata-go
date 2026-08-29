@@ -30,8 +30,6 @@ import (
 	"seata.apache.org/seata-go/v2/pkg/datasource/sql/util"
 )
 
-const oracleXATransLoose = 0x00010000
-
 const oracleXARecoverQuery = "SELECT x.formatid, RAWTOHEX(x.gtrid), RAWTOHEX(x.bqual) FROM TABLE(DBMS_XA.XA_RECOVER()) x"
 
 func execOracleXA(ctx context.Context, conn driver.Conn, functionName, branchXID, callArgs string, extraArgs []driver.NamedValue, allowedReturns []string) error {

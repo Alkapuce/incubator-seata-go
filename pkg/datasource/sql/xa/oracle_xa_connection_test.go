@@ -71,7 +71,7 @@ func TestOracleXAConnLifecycleExecutesDBMSXA(t *testing.T) {
 			wantFunction:      "DBMS_XA.XA_START",
 			wantCall:          "DBMS_XA.XA_START(l_xid, :flag)",
 			wantExtraArgName:  "flag",
-			wantExtraArgValue: oracleXATransLoose,
+			wantExtraArgValue: TMNoFlags,
 		},
 		{
 			name:              "end success",
