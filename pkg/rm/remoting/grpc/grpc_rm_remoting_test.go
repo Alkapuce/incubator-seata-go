@@ -130,3 +130,36 @@ func TestGrpcRMRemotingBranchReportReadonlyStatus(t *testing.T) {
 		assert.Equal(t, "readonly", captured.ApplicationData)
 	}
 }
+
+func TestGrpcRMRemotingLockQueryXAType(t *testing.T) {
+	var captured *pb.GlobalLockQueryRequestProto
+	patches := gomonkey.ApplyMethod(reflect.TypeOf(remotinggrpc.GetGrpcRemotingClient()), "SendSyncRequest",
+		func(_ *remotinggrpc.GrpcRemotingClient, msg interface{}) (interface{}, error) {
+			captured = msg.(*pb.GlobalLockQueryRequestProto)
+			return &pb.GlobalLockQueryResponseProto{
+				Lockable: true,
+			}, nil
+		})
+	defer patches.Reset()
+
+	lockable, err := (&GrpcRMRemoting{}).LockQuery(rm.LockQueryParam{
+		BranchType: branch.BranchTypeXA,
+		Xid:        "lock-query-xid",
+		ResourceId: "xa-lock-resource",
+		LockKeys:   "table:1",
+	})
+
+	assert.NoError(t, err)
+	assert.True(t, lockable)
+	if assert.NotNil(t, captured) {
+		registerRequest := captured.BranchRegisterRequest
+		if assert.NotNil(t, registerRequest) {
+			assert.Equal(t, pb.MessageTypeProto_TYPE_GLOBAL_LOCK_QUERY, registerRequest.AbstractTransactionRequest.AbstractMessage.MessageType)
+			assert.Equal(t, "lock-query-xid", registerRequest.Xid)
+			assert.Equal(t, "xa-lock-resource", registerRequest.ResourceId)
+			assert.Equal(t, "table:1", registerRequest.LockKey)
+			assert.Equal(t, pb.BranchTypeProto_XA, registerRequest.BranchType)
+			assert.EqualValues(t, branch.BranchTypeXA, pb.BranchTypeProto_XA)
+		}
+	}
+}

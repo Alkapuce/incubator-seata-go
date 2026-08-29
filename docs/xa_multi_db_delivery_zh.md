@@ -103,7 +103,7 @@ rollback branch、recover 可见性与清理，以及 readonly prepare 返回 `X
 | Datasource resource group | `DBResource.GetResourceGroupId` 跟随 `rm.GetRmConfig().TxServiceGroup`，`rm.Resource` 必需方法可安全调用，并与 RM 注册请求使用的 transaction service group 保持一致。 |
 | PostgreSQL 二阶段幂等 | PostgreSQL SQLSTATE `42704` 和 `55000` 已分类为 already-ended 错误，重复或延迟二阶段失败时可按 RM 契约缓存 committed/rollbacked 状态。 |
 | 只读 prepare 状态 | 普通协议枚举已补 `BranchStatusPhaseoneReadonly = 13`，与已有 gRPC `PhaseOne_RDONLY` 值对齐；普通 codec 和 gRPC branch-report request 覆盖均保留 readonly 状态。 |
-| remoting XA 分支类型 | `BranchTypeProto` 已显式包含 `XA = 3`，与 XA 分支注册、上报、提交和回滚消息使用的普通协议 `BranchTypeXA` 值对齐；gRPC branch-register/report、Getty branch-register/report/global-lock-query 出站请求测试，以及 gRPC/Getty branch-end processor 测试均覆盖 XA 映射。 |
+| remoting XA 分支类型 | `BranchTypeProto` 已显式包含 `XA = 3`，与 XA 分支注册、上报、提交和回滚消息使用的普通协议 `BranchTypeXA` 值对齐；gRPC/Getty branch-register、branch-report、global-lock-query 出站请求测试和 branch-end processor 测试均覆盖 XA 映射。 |
 | License header | 新增 Go 和 Markdown 文件均包含 Apache Software Foundation license header。 |
 | 生成文件 | `dbtype_string.go` 已随 DB type 测试同步更新。 |
 | 敏感信息 | 文档示例使用占位值，不应包含真实 DSN、密码、wallet 或私有部署信息；生成 RM resource ID 时会在注册前去除 URL userinfo、MySQL/vendor 风格的 `user:password@` 前缀，以及 `user=`、`password=`、`sslpassword=`、`passfile=` 和 SSL key/certificate 路径等 key-value 字段，同时保留用于稳定识别 resource 的非凭据 key-value 字段；RM branch-end processor 日志只记录 `applicationData` 长度，不输出 payload。 |
