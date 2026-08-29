@@ -132,4 +132,3 @@ Record these facts with every real Oracle run:
 docker rm -f seata-go-oracle-xa-it
 rm -rf "$probe_dir"
 ```
-

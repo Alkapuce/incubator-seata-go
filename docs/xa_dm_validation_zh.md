@@ -98,4 +98,3 @@ Seata Go lifecycle, readonly prepare status propagation, recovery parsing, and
 phase-two cleanup, but it still requires real-driver license, compatibility
 mode, recovery output, and error-code validation before production support.
 ```
-

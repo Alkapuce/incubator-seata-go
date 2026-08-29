@@ -121,4 +121,3 @@ oracle_xa_wrapper_probe=pass branch_id=1 reports=1
 docker rm -f seata-go-oracle-xa-it
 rm -rf "$probe_dir"
 ```
-
