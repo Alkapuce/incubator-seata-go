@@ -163,12 +163,6 @@ func TestRegisterSeataXADriver(t *testing.T) {
 	mockDriver := mock.NewMockTestDriver(ctrl)
 	mockConn := mock.NewMockTestDriverConn(ctrl)
 	mockDriver.EXPECT().Open("opaque-dsn").AnyTimes().Return(mockConn, nil)
-	mockConn.EXPECT().QueryContext(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
-		func(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-			rows := &mysqlMockRows{}
-			rows.data = [][]interface{}{{"Oracle Database 23ai"}}
-			return rows, nil
-		})
 	mockConn.EXPECT().Close().AnyTimes().Return(nil)
 
 	driverName := fmt.Sprintf("seata-xa-vendor-%d", time.Now().UnixNano())

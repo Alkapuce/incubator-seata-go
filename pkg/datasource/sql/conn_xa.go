@@ -43,6 +43,7 @@ type XAConn struct {
 	*Conn
 
 	tx                 driver.Tx
+	xaDriverTx         driver.Tx
 	xaResource         xa.XAResource
 	xaErrorClassifier  xa.XAErrorClassifier
 	xaBranchXid        *XABranchXid
@@ -169,8 +170,14 @@ func (c *XAConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx,
 
 	baseTx.xaConn = c
 
+	if err := c.beginDriverTxIfNecessary(ctx, opts); err != nil {
+		c.cleanXABranchContext()
+		return nil, fmt.Errorf("failed to start xa driver transaction xid:%s err:%w", c.txCtx.XID, err)
+	}
+
 	c.branchRegisterTime = time.Now()
 	if err := baseTx.register(c.txCtx); err != nil {
+		c.cleanupDriverTx()
 		c.cleanXABranchContext()
 		return nil, fmt.Errorf("failed to register xa branch %s, err:%w", c.txCtx.XID, err)
 	}
@@ -179,12 +186,46 @@ func (c *XAConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx,
 	c.keepIfNecessary()
 
 	if err = c.start(ctx); err != nil {
+		c.cleanupDriverTx()
 		c.cleanXABranchContext()
 		return nil, fmt.Errorf("failed to start xa branch xid:%s err:%w", c.txCtx.XID, err)
 	}
 	c.xaActive = true
 
 	return &XATx{tx: tx.(*Tx)}, nil
+}
+
+func (c *XAConn) beginDriverTxIfNecessary(ctx context.Context, opts driver.TxOptions) error {
+	if !c.needsDriverTxForXA() {
+		return nil
+	}
+	if c.xaDriverTx != nil {
+		return nil
+	}
+	beginner, ok := c.Conn.targetConn.(driver.ConnBeginTx)
+	if !ok {
+		return fmt.Errorf("db type %s xa resource requires driver ConnBeginTx", c.dbType.String())
+	}
+	tx, err := beginner.BeginTx(ctx, opts)
+	if err != nil {
+		return err
+	}
+	c.xaDriverTx = tx
+	return nil
+}
+
+func (c *XAConn) needsDriverTxForXA() bool {
+	return c.dbType == types.DBTypeOracle || c.dbType == types.DBTypeDM
+}
+
+func (c *XAConn) cleanupDriverTx() {
+	if c.xaDriverTx == nil {
+		return
+	}
+	if err := c.xaDriverTx.Rollback(); err != nil {
+		log.Errorf("cleanup xa driver transaction xid:%s err:%v", c.txCtx.XID, err)
+	}
+	c.xaDriverTx = nil
 }
 
 func (c *XAConn) createOnceTxContext(ctx context.Context) bool {
@@ -525,6 +566,7 @@ func (c *XAConn) Rollback(ctx context.Context) error {
 		}
 		c.rollBacked = true
 	}
+	c.cleanupDriverTx()
 	c.cleanXABranchContext()
 
 	return nil
@@ -563,6 +605,7 @@ func (c *XAConn) Commit(ctx context.Context) error {
 	if prepareResult == xa.XAReadOnly {
 		c.prepareStatus = branch.BranchStatusPhaseoneReadonly
 		c.releaseIfNecessary()
+		c.cleanupDriverTx()
 	}
 
 	// Phase-1 is done: this session no longer has an in-flight XA branch. Clear
@@ -594,6 +637,7 @@ func (c *XAConn) commitErrorHandle(ctx context.Context, cause error) error {
 		return fmt.Errorf("XA branch commit failed xid:%s, err:%w, rollback err:%v", c.txCtx.XID, cause, err)
 	}
 	c.cleanXABranchContext()
+	c.cleanupDriverTx()
 	return cause
 }
 
@@ -613,6 +657,7 @@ func (c *XAConn) Close() error {
 	if c.isConnKept && c.ShouldBeHeld() {
 		return nil
 	}
+	c.cleanupDriverTx()
 	c.cleanXABranchContext()
 	// Check if Conn is nil before calling Close
 	if c.Conn == nil {
@@ -622,6 +667,7 @@ func (c *XAConn) Close() error {
 }
 
 func (c *XAConn) CloseForce() error {
+	c.cleanupDriverTx()
 	if err := c.Conn.Close(); err != nil {
 		return err
 	}
@@ -634,6 +680,7 @@ func (c *XAConn) CloseForce() error {
 func (c *XAConn) XaCommit(ctx context.Context, xaXid XAXid) error {
 	err := c.xaResource.Commit(ctx, xaXid.String(), false)
 	c.releaseIfNecessary()
+	c.cleanupDriverTx()
 	return err
 }
 
@@ -644,5 +691,6 @@ func (c *XAConn) XaRollbackByBranchId(ctx context.Context, xaXid XAXid) error {
 func (c *XAConn) XaRollback(ctx context.Context, xaXid XAXid) error {
 	err := c.xaResource.Rollback(ctx, xaXid.String())
 	c.releaseIfNecessary()
+	c.cleanupDriverTx()
 	return err
 }

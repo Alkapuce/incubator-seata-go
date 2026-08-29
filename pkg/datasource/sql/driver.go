@@ -403,15 +403,15 @@ func selectDBVersion(ctx context.Context, conn driver.Conn) (string, error) {
 	}
 	if ok {
 		rowsi, err = util.CtxDriverQuery(ctx, queryerCtx, queryer, "SELECT VERSION()", nil)
+		if err != nil {
+			log.Errorf("ctx driver query: %+v", err)
+			return "", err
+		}
 		defer func() {
 			if rowsi != nil {
 				rowsi.Close()
 			}
 		}()
-		if err != nil {
-			log.Errorf("ctx driver query: %+v", err)
-			return "", err
-		}
 	} else {
 		log.Errorf("target conn should been driver.QueryerContext or driver.Queryer")
 		return "", fmt.Errorf("invalid conn")

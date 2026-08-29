@@ -107,6 +107,27 @@ func (mi *mockSQLInterceptor) After(ctx context.Context, execCtx *types.ExecCont
 // When set, baseMockConn will call this hook for each direct ExecContext.
 var simulateExecContextError func(query string) error
 
+// simulateBeginTxHook lets tests observe driver-level transactions that are
+// opened only to keep DBMS_XA drivers such as go-ora out of autoCommit mode.
+var simulateBeginTxHook func(ctx context.Context, opts driver.TxOptions) (driver.Tx, error)
+
+// simulateDriverTxRollbackHook lets tests observe cleanup of the driver-level
+// transaction state after XA lifecycle operations finish.
+var simulateDriverTxRollbackHook func() error
+
+type fakeXADriverTx struct{}
+
+func (fakeXADriverTx) Commit() error {
+	return nil
+}
+
+func (fakeXADriverTx) Rollback() error {
+	if simulateDriverTxRollbackHook != nil {
+		return simulateDriverTxRollbackHook()
+	}
+	return nil
+}
+
 // simulateExecContextHook lets tests inspect or mutate driver args, for example
 // setting sql.Out values returned by database-specific XA control blocks.
 var simulateExecContextHook func(query string, args []driver.NamedValue) error
@@ -287,6 +308,14 @@ func newMockXAConnForDBType(t *testing.T, ctrl *gomock.Controller, branchID int6
 
 	mockConn := mock.NewMockTestDriverConn(ctrl)
 	baseMockConn(mockConn)
+	mockConn.EXPECT().BeginTx(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+			if simulateBeginTxHook != nil {
+				return simulateBeginTxHook(ctx, opts)
+			}
+			return fakeXADriverTx{}, nil
+		},
+	)
 
 	return &XAConn{
 		Conn: &Conn{
@@ -1910,6 +1939,20 @@ func TestXAConn_AutoCommit_InBranchFallbackErrorRollsBackBranch(t *testing.T) {
 func TestXAConn_BeginTx_DoesNotStartPhysicalTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	defer func() {
+		simulateBeginTxHook = nil
+		simulateDriverTxRollbackHook = nil
+	}()
+
+	var beginCnt, rollbackCnt int32
+	simulateBeginTxHook = func(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+		atomic.AddInt32(&beginCnt, 1)
+		return fakeXADriverTx{}, nil
+	}
+	simulateDriverTxRollbackHook = func() error {
+		atomic.AddInt32(&rollbackCnt, 1)
+		return nil
+	}
 
 	xaConn, mockMgr := newMockXAConn(t, ctrl, 123)
 	mockMgr.EXPECT().BranchReport(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -1935,6 +1978,76 @@ func TestXAConn_BeginTx_DoesNotStartPhysicalTx(t *testing.T) {
 
 	err = tx.Rollback()
 	assert.NoError(t, err)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&beginCnt), "mysql XA branch must not open a driver transaction")
+	assert.Equal(t, int32(0), atomic.LoadInt32(&rollbackCnt), "mysql XA branch must not cleanup a driver transaction")
+}
+
+func TestXAConn_BeginTx_DBMSXADriverTxHeldUntilPhaseTwo(t *testing.T) {
+	tests := []struct {
+		name       string
+		dbType     types.DBType
+		resourceID string
+		branchID   int64
+	}{
+		{name: "oracle", dbType: types.DBTypeOracle, resourceID: "jdbc:oracle://test/resource", branchID: 1901},
+		{name: "dm", dbType: types.DBTypeDM, resourceID: "jdbc:dm://test/resource", branchID: 1902},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			CleanTxHooks()
+			defer func() {
+				simulateBeginTxHook = nil
+				simulateDriverTxRollbackHook = nil
+				CleanTxHooks()
+			}()
+
+			prevTimeout := xaConnTimeout
+			xaConnTimeout = time.Minute
+			defer func() { xaConnTimeout = prevTimeout }()
+
+			var beginCnt, rollbackCnt int32
+			simulateBeginTxHook = func(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+				atomic.AddInt32(&beginCnt, 1)
+				return fakeXADriverTx{}, nil
+			}
+			simulateDriverTxRollbackHook = func() error {
+				atomic.AddInt32(&rollbackCnt, 1)
+				return nil
+			}
+
+			xaConn, mockMgr := newMockXAConnForDBType(t, ctrl, tt.branchID, tt.dbType, tt.resourceID)
+			mockMgr.EXPECT().BranchReport(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, param rm.BranchReportParam) error {
+					assert.Equal(t, branch.BranchTypeXA, param.BranchType)
+					assert.Equal(t, tt.branchID, param.BranchId)
+					assert.EqualValues(t, branch.BranchStatusPhaseoneDone, param.Status)
+					return nil
+				},
+			).Times(1)
+
+			ctx := tm.InitSeataContext(context.Background())
+			tm.SetXID(ctx, uuid.NewString())
+
+			tx, err := xaConn.BeginTx(ctx, driver.TxOptions{})
+			assert.NoError(t, err)
+			assert.Equal(t, int32(1), atomic.LoadInt32(&beginCnt))
+			assert.NotNil(t, xaConn.xaDriverTx)
+			branchXID := xaConn.xaBranchXid
+
+			err = tx.Commit()
+			assert.NoError(t, err)
+			assert.NotNil(t, xaConn.xaDriverTx, "prepared dbms xa branch must retain driver transaction state until phase two")
+			assert.Equal(t, int32(0), atomic.LoadInt32(&rollbackCnt))
+
+			err = xaConn.XaCommit(ctx, branchXID)
+			assert.NoError(t, err)
+			assert.Nil(t, xaConn.xaDriverTx)
+			assert.Equal(t, int32(1), atomic.LoadInt32(&rollbackCnt))
+		})
+	}
 }
 
 func TestXAConn_BeginTx_DBMSXAReadonlyPrepareReportsReadonlyAndReleases(t *testing.T) {
@@ -1956,6 +2069,8 @@ func TestXAConn_BeginTx_DBMSXAReadonlyPrepareReportsReadonlyAndReleases(t *testi
 			defer func() {
 				simulateExecContextError = nil
 				simulateExecContextHook = nil
+				simulateBeginTxHook = nil
+				simulateDriverTxRollbackHook = nil
 				CleanTxHooks()
 			}()
 
@@ -1979,7 +2094,15 @@ func TestXAConn_BeginTx_DBMSXAReadonlyPrepareReportsReadonlyAndReleases(t *testi
 				},
 			).Times(1)
 
-			var prepareCnt int32
+			var beginCnt, prepareCnt, rollbackCnt int32
+			simulateBeginTxHook = func(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+				atomic.AddInt32(&beginCnt, 1)
+				return fakeXADriverTx{}, nil
+			}
+			simulateDriverTxRollbackHook = func() error {
+				atomic.AddInt32(&rollbackCnt, 1)
+				return nil
+			}
 			simulateExecContextHook = func(query string, args []driver.NamedValue) error {
 				if strings.Contains(strings.ToUpper(query), "DBMS_XA.XA_PREPARE(") {
 					atomic.AddInt32(&prepareCnt, 1)
@@ -1998,7 +2121,10 @@ func TestXAConn_BeginTx_DBMSXAReadonlyPrepareReportsReadonlyAndReleases(t *testi
 
 			err = tx.Commit()
 			assert.NoError(t, err)
+			assert.Equal(t, int32(1), atomic.LoadInt32(&beginCnt))
 			assert.Equal(t, int32(1), atomic.LoadInt32(&prepareCnt))
+			assert.Equal(t, int32(1), atomic.LoadInt32(&rollbackCnt))
+			assert.Nil(t, xaConn.xaDriverTx)
 			assert.EqualValues(t, branch.BranchStatusPhaseoneReadonly, xaConn.PrepareStatus())
 			_, ok := xaConn.res.Lookup(branchXID)
 			assert.False(t, ok, "readonly prepared branch must not remain held for phase two")

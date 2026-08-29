@@ -133,6 +133,11 @@ func (db *DBResource) init() {
 		return
 	}
 	defer conn.Close()
+	if db.dbType == types.DBTypeOracle || db.dbType == types.DBTypeDM {
+		db.SetDbVersion(db.dbType.String())
+		db.checkDbVersion()
+		return
+	}
 	version, err := selectDBVersion(ctx, conn)
 	if err != nil {
 		log.Errorf("select db version: %v", err)
