@@ -119,8 +119,8 @@ rollback branch、recover 可见性与清理，以及 readonly prepare 返回 `X
 | 优先级 | 事项 | 原因 |
 | --- | --- | --- |
 | P1 | 更完整的 Oracle 验证矩阵 | Oracle Free 加 go-ora 已确认 wrapper 路径、命名绑定、输出参数、权限、recover、readonly prepare 和 held connection 二阶段提交；生产支持口径前仍建议补充其他 Oracle edition、driver、重复回调、branch missing 错误和连接断开场景。 |
-| P0 | 达梦 driver 与许可证验证 | 当前原型刻意不引入直接依赖，官方 driver 来源、版本、许可证和再分发条款明确前不能声明生产支持。 |
-| P1 | 达梦真实库验证 | `DBMS_XA` 可用性、`XA_COMPATIBLE_MODE`、recover 形态和真实错误码需要实测。 |
+| P0 | 达梦 driver 与许可证验证 | 当前原型刻意不引入直接依赖，官方 driver 来源、版本、许可证和再分发条款明确前不能声明生产支持。必查项见 [`xa_dm_validation_zh.md`](./xa_dm_validation_zh.md)。 |
+| P1 | 达梦真实库验证 | `DBMS_XA` 可用性、`XA_COMPATIBLE_MODE`、recover 形态和真实错误码需要实测。生命周期与错误语义清单见 [`xa_dm_validation_zh.md`](./xa_dm_validation_zh.md)。 |
 | P2 | Kingbase 原型决策 | 基于 PostgreSQL prepared transaction 的原型可行性较高，但应等待 driver 和兼容性确认。 |
 | P2 | Oscar 后续跟进 | 只有在公开 Go driver、XA API、recover 和错误码证据明确后再新增代码。 |
 

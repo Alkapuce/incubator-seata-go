@@ -123,8 +123,8 @@ The split can be squashed differently if maintainers prefer fewer pull requests,
 | Priority | Item | Why It Matters |
 | --- | --- | --- |
 | P1 | Broader Oracle validation matrix | Oracle Free plus go-ora now confirms the wrapper path, named binds, output binds, privileges, recovery, readonly prepare, and held-connection phase-two commit. Additional Oracle editions, drivers, duplicate callbacks, branch-missing errors, and connection-loss cases should still be recorded before broad production wording. |
-| P0 | Dameng driver and license validation | The prototype intentionally avoids a direct driver dependency until the official driver source, versioning, license, and redistribution terms are clear. |
-| P1 | Dameng real database validation | `DBMS_XA` availability, `XA_COMPATIBLE_MODE`, recovery shape, and real error codes must be verified before marking Dameng production-ready. |
+| P0 | Dameng driver and license validation | The prototype intentionally avoids a direct driver dependency until the official driver source, versioning, license, and redistribution terms are clear. The required checks are listed in [`xa_dm_validation.md`](./xa_dm_validation.md). |
+| P1 | Dameng real database validation | `DBMS_XA` availability, `XA_COMPATIBLE_MODE`, recovery shape, and real error codes must be verified before marking Dameng production-ready. The lifecycle and error checklist is listed in [`xa_dm_validation.md`](./xa_dm_validation.md). |
 | P2 | Kingbase prototype decision | A PostgreSQL prepared-transaction-based prototype is plausible, but it should wait for driver and compatibility confirmation. |
 | P2 | Oscar follow-up | Add code only after public Go driver, XA API, recovery, and error-code evidence is available. |
 

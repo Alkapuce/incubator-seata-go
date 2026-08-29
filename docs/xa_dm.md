@@ -84,6 +84,9 @@ The prototype maps Seata branch XIDs to `DBMS_XA_XID(formatid, gtrid, bqual)`:
   callbacks, and invalid XID errors against a real Dameng database before using
   the prototype in production.
 
+See [Dameng XA Validation Checklist](./xa_dm_validation.md) for the required
+real-driver and real-database validation items.
+
 ## Local Tests
 
 The Dameng prototype tests use mock `driver.Conn` implementations and do not

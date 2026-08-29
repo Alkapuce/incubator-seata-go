@@ -75,6 +75,8 @@ DSN。
 - 在把 driver 加入任何 Apache 仓库依赖前，必须确认来源、许可证和再分发条款。
 - 正式使用前，需要在真实达梦数据库上验证 `XA_RECOVER`、branch missing、重复二阶段回调和非法 XID 错误。
 
+真实 driver 和真实数据库验证项见 [达梦 XA 验证清单](./xa_dm_validation_zh.md)。
+
 ## 本地测试
 
 达梦原型测试使用 mock `driver.Conn`，不需要真实达梦数据库：
