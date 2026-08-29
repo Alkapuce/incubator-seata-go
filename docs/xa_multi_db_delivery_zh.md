@@ -77,7 +77,9 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 `RegisterSeataXADriver` 注册 `seata-xa-oracle` 风格 wrapper，不再由应用手动调用
 `BeginTx`，而是通过 `XAConn.BeginTx` / `XATx.Commit` 完成一阶段 prepare，并通过 held
 XA connection 完成二阶段提交。同一环境也确认了 `DBMS_XA.XA_START` 使用 `TMNOFLAGS`、
-rollback branch、recover 可见性与清理，以及 readonly prepare 返回 `XA_RDONLY`。
+rollback branch、recover 可见性与清理，以及 readonly prepare 返回 `XA_RDONLY`。可复现的外部
+模块流程已记录在 [`xa_oracle_go_ora_validation_zh.md`](./xa_oracle_go_ora_validation_zh.md)，
+不把 go-ora 加入项目依赖图。
 
 ## 合规检查
 

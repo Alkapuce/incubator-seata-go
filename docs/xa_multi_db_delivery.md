@@ -81,6 +81,9 @@ External Oracle validation for this delivery branch passed against
 `BeginTx`, and completed phase-two commit through the held XA connection. The
 same environment confirmed `DBMS_XA.XA_START` with `TMNOFLAGS`, rollback branch,
 recover visibility and cleanup, and readonly prepare returning `XA_RDONLY`.
+The reproducible external-module flow is documented in
+[`xa_oracle_go_ora_validation.md`](./xa_oracle_go_ora_validation.md) without
+adding go-ora to the project dependency graph.
 
 ## Compliance Check
 

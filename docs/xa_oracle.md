@@ -116,6 +116,8 @@ External validation has also passed against Oracle Free `23.26.2.0.0` in
 That probe registered a `seata-xa-oracle`-style wrapper through
 `RegisterSeataXADriver`, completed phase-one prepare through `XAConn.BeginTx` /
 `XATx.Commit`, then completed phase-two through the held XA connection.
+See [Oracle go-ora Validation Notes](./xa_oracle_go_ora_validation.md) for the
+external-module validation flow.
 
 There is no default Oracle integration test in this repository yet. A real
 Oracle validation must record:

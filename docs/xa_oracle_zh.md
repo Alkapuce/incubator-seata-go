@@ -105,7 +105,8 @@ go test ./pkg/datasource/sql/...
 外部真实库验证也已在 `gvenzl/oracle-free:23-slim-faststart` 的 Oracle Free `23.26.2.0.0`
 和 `github.com/sijms/go-ora/v2 v2.9.0` 上通过。该 probe 通过 `RegisterSeataXADriver`
 注册 `seata-xa-oracle` 风格的 wrapper，经 `XAConn.BeginTx` / `XATx.Commit` 完成一阶段
-prepare，再通过 held XA connection 完成二阶段提交。
+prepare，再通过 held XA connection 完成二阶段提交。外部模块验证流程见
+[Oracle go-ora 验证记录](./xa_oracle_go_ora_validation_zh.md)。
 
 当前仓库还没有默认启用的 Oracle 集成测试。真实 Oracle 验证记录至少应包含：
 
