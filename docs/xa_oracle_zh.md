@@ -74,6 +74,8 @@ Seata Go 会拒绝无法从 Oracle recover 结果反解的 XID，不会静默 ha
 
 - Oracle driver 需要能通过 `ExecerContext`，或 `PrepareContext` 加 `StmtExecContext` 执行 PL/SQL block。
 - Oracle driver 需要能通过 `QueryerContext`，或 `PrepareContext` 加 `StmtQueryContext` 执行恢复扫描。
+- Oracle driver 需要实现 `driver.ConnBeginTx`；Seata Go 会在 Oracle `DBMS_XA` branch 中打开一层
+  driver-level transaction，用于让 go-ora 等 driver 在 XA branch 活跃期间关闭 autoCommit 状态。
 - 应用用户需要具备执行 `DBMS_XA` 包的权限。
 - 正式使用前，应确认应用能调用 `DBMS_XA.XA_RECOVER()`，或具备等价恢复路径。
 - 验证失败后要确保 prepared branch 可见并被清理。
@@ -100,6 +102,11 @@ go test ./pkg/datasource/sql/xa -run Oracle -v
 go test ./pkg/datasource/sql/...
 ```
 
+外部真实库验证也已在 `gvenzl/oracle-free:23-slim-faststart` 的 Oracle Free `23.26.2.0.0`
+和 `github.com/sijms/go-ora/v2 v2.9.0` 上通过。该 probe 通过 `RegisterSeataXADriver`
+注册 `seata-xa-oracle` 风格的 wrapper，经 `XAConn.BeginTx` / `XATx.Commit` 完成一阶段
+prepare，再通过 held XA connection 完成二阶段提交。
+
 当前仓库还没有默认启用的 Oracle 集成测试。真实 Oracle 验证记录至少应包含：
 
 - Oracle edition 和版本。
@@ -116,7 +123,8 @@ go test ./pkg/datasource/sql/...
 | --- | --- |
 | `Start` 的 `TMNoFlags` | 作为 `TMNOFLAGS` 传给 `DBMS_XA.XA_START`；Oracle JDBC loose-branch flag 不适用于直接调用 `DBMS_XA` 包的路径。 |
 | `End` 的 `TMFail` | 内部映射为 `TMSuccess` 后再 rollback，因为当前 `DBMS_XA.XA_END` 路径不接受 `TMFAIL`。 |
-| `XAPrepare` 只读结果 | 读取 `DBMS_XA.XA_PREPARE` 返回码；`XA_OK` 和 `XA_RDONLY` 都视为 prepare 成功，返回 `XA_RDONLY` 时向上层上报 `BranchStatusPhaseoneReadonly`。真实 driver 的输出参数绑定行为仍需数据库验证。 |
+| Driver transaction state | Oracle `DBMS_XA` branch 会在 `XA_START` 前打开一层 driver-level transaction，关闭 driver autoCommit 状态。普通 prepared branch 会把这层 driver transaction 保留到二阶段；readonly 和已回滚 branch 会立即清理。 |
+| `XAPrepare` 只读结果 | 读取 `DBMS_XA.XA_PREPARE` 返回码；`XA_OK` 和 `XA_RDONLY` 都视为 prepare 成功，返回 `XA_RDONLY` 时向上层上报 `BranchStatusPhaseoneReadonly`。Oracle Free 加 go-ora 验证已确认 `XA_OK` 和 `XA_RDONLY` 输出参数路径可用。 |
 | 恢复扫描 | 使用 `TABLE(DBMS_XA.XA_RECOVER())`，再把 `formatid/gtrid/bqual` 转回 Seata branch XID 字符串。 |
 | already-ended 分类 | `ORA-24756`、`ORA-24761`、`XAER_NOTA` 和包装后的 `DBMS_XA` 数字返回码 `-4` 会被识别为 already-ended 状态。 |
 
@@ -126,6 +134,7 @@ go test ./pkg/datasource/sql/...
 | --- | --- |
 | `sql: driver does not support the use of Named Parameters` | 当前 Oracle driver 回退到旧式 statement 执行路径，无法绑定 DBMS_XA PL/SQL block 需要的命名参数。 |
 | DBMS_XA 调用在 Prepare 或 statement 执行阶段失败 | 确认当前 Oracle driver 能通过连接级 context 方法或 statement 级 context 方法执行带命名绑定的 PL/SQL block。 |
+| `ORA-02089: COMMIT is not allowed in a subordinate session` | 确认 wrapper 版本包含 DBMS_XA driver transaction state 管理，并确认所选 driver 的 `ConnBeginTx` 会关闭 autoCommit。 |
 | 只读 prepare 没有按预期上报 | 确认当前 Oracle driver 支持 `database/sql.Out` 命名输出参数，用于接收 `DBMS_XA.XA_PREPARE` 返回码。 |
 | `ORA-01031: insufficient privileges` | 授权应用用户访问 `DBMS_XA`，或使用具备对应 package 权限的用户验证。 |
 | `oracle xa gtrid exceeds RAW(64)` 或 `oracle xa bqual exceeds RAW(64)` | 缩短全局 XID，或等待项目接受新的 XID 映射策略。 |

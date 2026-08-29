@@ -28,7 +28,7 @@
 | PostgreSQL | 保留 prepared transaction XA resource，引用 prepared-transaction XID SQL literal，关闭 `pg_prepared_xacts` recover rows，接受 string 或 `[]byte` recover payload，并已将 `pgconn.PgError` 或文本错误中的 SQLSTATE `42704` / `55000` 分类为 already-ended，用于二阶段幂等状态处理。 |
 | MariaDB | 新增 `seata-xa-mariadb`、MariaDB XA resource factory、MySQL-compatible XA 生命周期语句、recover 解析、MariaDB 专属错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、集成测试和用户文档。 |
 | SQL XA driver fallback | MySQL、MariaDB 和 PostgreSQL XA 控制语句及 recover 查询现在使用共享 driver prepare fallback；底层 driver 在连接级 exec/query 返回 `driver.ErrSkip` 时，仍可在同一物理连接上 prepare 并执行对应语句。 |
-| Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析与 rows 清理、prepared statement fallback、already-ended 错误分类、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试和配置/排查文档。 |
+| Oracle | 新增 Oracle `DBMS_XA` XID 映射、生命周期调用、只读 prepare 状态上报、recover 解析与 rows 清理、prepared statement fallback、already-ended 错误分类、DBMS_XA driver transaction state 管理、XAConn autoCommit、显式事务 commit/rollback、超时、prepare 失败、TC 上报失败、二阶段 held connection 释放和二阶段失败状态分类覆盖、单元测试、配置/排查文档，以及 Oracle Free 加 go-ora 外部验证。 |
 | XA prepared statement | `XAConn.PrepareContext` 返回的 statement 在执行 `StmtExecContext` / `StmtQueryContext` 时进入与直接 `ExecContext` / `QueryContext` 相同的 XA branch 生命周期；query rows 仍在 `Rows.Close` 时延迟提交 branch。 |
 | Datasource resource group | `DBResource.GetResourceGroupId` 现在返回当前 RM transaction service group，不再运行时 panic，使 datasource resource 接口与 RM 注册契约保持一致。 |
 | 厂商 adapter | 新增 `RegisterSeataXADriver` 和 `SeataDriverDescriptor`，应用可以注册外部 `database/sql/driver.Driver`，无需把厂商 driver 加入 Seata Go 直接依赖。 |
@@ -53,6 +53,7 @@ go test ./pkg/datasource/sql/xa -run 'TestMysqlXAConn_LifecycleSQLQuotesXID|Test
 go test ./pkg/datasource/sql/xa -run 'TestPostgresXAConnLifecycleSQLQuotesXID' -v
 go test ./pkg/datasource/sql/xa -run 'Test(Mysql|MariaDB|Postgres)XAConn.*FallsBackToPrepare' -v
 go test ./pkg/datasource/sql -run 'TestXAConn_PreparedExecContext_AutoCommitCompletesXABranch|TestXAConn_PreparedQueryContext_AutoCommitDefersBranchCommitUntilRowsClose' -v
+go test ./pkg/datasource/sql -run 'TestRegisterSeataXADriver|TestXAConn_BeginTx_DBMSXADriverTxHeldUntilPhaseTwo|TestXAConn_BeginTx_DBMSXAReadonlyPrepareReportsReadonlyAndReleases' -v
 go test ./pkg/datasource/sql -run 'TestDBResourceGetResourceGroupIdUsesRMConfig|TestDBResourceCheckDbVersionControlsXAConnectionHold|TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
 go test ./pkg/datasource/sql/...
@@ -71,6 +72,13 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 重复回调返回 MariaDB `Error 1397: XAER_NOTA: Unknown XID`，且已完成 XID 不会残留在
 `XA RECOVER` 结果中。
 
+当前交付分支也已在 `gvenzl/oracle-free:23-slim-faststart` 的 Oracle Free `23.26.2.0.0`
+和 `github.com/sijms/go-ora/v2 v2.9.0` 上完成外部 Oracle 验证。probe 通过
+`RegisterSeataXADriver` 注册 `seata-xa-oracle` 风格 wrapper，不再由应用手动调用
+`BeginTx`，而是通过 `XAConn.BeginTx` / `XATx.Commit` 完成一阶段 prepare，并通过 held
+XA connection 完成二阶段提交。同一环境也确认了 `DBMS_XA.XA_START` 使用 `TMNOFLAGS`、
+rollback branch、recover 可见性与清理，以及 readonly prepare 返回 `XA_RDONLY`。
+
 ## 合规检查
 
 | 检查项 | 当前结果 |
@@ -80,6 +88,8 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 | Recover rows 清理 | MySQL、MariaDB、PostgreSQL、Oracle 和达梦 recover 读取路径都会关闭 rows；SQL recover 路径接受 driver 以 string 或 bytes 返回 data，DBMS_XA recover 路径已用单元测试覆盖数值、string 和 bytes 字段。 |
 | XID SQL literal quoting | MySQL、MariaDB 和 PostgreSQL XA 控制语句在构造 SQL string literal 前会转义 branch XID 内嵌单引号。 |
 | Driver prepare fallback | MySQL、MariaDB、PostgreSQL、Oracle 和达梦 XA exec/query 路径在底层 driver 合法返回 `driver.ErrSkip` 时会使用共享 prepare fallback；SQL XA 和 DBMS_XA resource 都有 fallback 测试覆盖。 |
+| DBMS_XA driver transaction state | Oracle 和达梦 XA branch 会在 `XA_START` 前打开一层 driver-level transaction，避免 DBMS_XA driver 在 branch 内保持 autoCommit；普通 prepared branch 保留到二阶段，rollback、readonly、failure、close 和 force-close 路径会清理。 |
+| Oracle/DM version probing | Oracle 和达梦 resource 初始化跳过 MySQL 风格 `SELECT VERSION()` 探测；它们的连接保活策略不依赖解析服务端版本，部分 driver 也不接受该查询。 |
 | XA 连接保活策略 | `DBResource.checkDbVersion` 统一决定是否保活：MySQL 8.0.29 之前版本、MariaDB、Oracle 和达梦保留 prepared 连接；MySQL 8.0.29+ 和 PostgreSQL 不再仅因 DBType 已知而强制保活。 |
 | Prepared statement XA 生命周期 | 带 context 的 prepared statement 在执行时进入 XA branch 生命周期，而不是在 prepare 时提交；prepared query rows 继续保持 close-time branch commit 行为。 |
 | Datasource resource group | `DBResource.GetResourceGroupId` 跟随 `rm.GetRmConfig().TxServiceGroup`，`rm.Resource` 必需方法可安全调用，并与 RM 注册请求使用的 transaction service group 保持一致。 |
@@ -106,7 +116,7 @@ SEATA_GO_TEST_MARIADB_DSN='user:password@tcp(127.0.0.1:3306)/seata_demo?parseTim
 
 | 优先级 | 事项 | 原因 |
 | --- | --- | --- |
-| P0 | Oracle 真实库验证 | 单元测试只能证明 Go 侧 PL/SQL 构造；真实 Oracle driver 和数据库还需要确认命名绑定、权限、recover 行和错误文本。 |
+| P1 | 更完整的 Oracle 验证矩阵 | Oracle Free 加 go-ora 已确认 wrapper 路径、命名绑定、输出参数、权限、recover、readonly prepare 和 held connection 二阶段提交；生产支持口径前仍建议补充其他 Oracle edition、driver、重复回调、branch missing 错误和连接断开场景。 |
 | P0 | 达梦 driver 与许可证验证 | 当前原型刻意不引入直接依赖，官方 driver 来源、版本、许可证和再分发条款明确前不能声明生产支持。 |
 | P1 | 达梦真实库验证 | `DBMS_XA` 可用性、`XA_COMPATIBLE_MODE`、recover 形态和真实错误码需要实测。 |
 | P2 | Kingbase 原型决策 | 基于 PostgreSQL prepared transaction 的原型可行性较高，但应等待 driver 和兼容性确认。 |
@@ -118,6 +128,6 @@ release notes 和 PR 描述建议使用准确措辞：
 
 - MariaDB：具备单元测试、文档，并已在 MariaDB 11.4.13 上验证 lifecycle、recover 清理和重复二阶段回调的 XA resource 支持。
 - PostgreSQL：已有 prepared transaction XA resource，并补充 XID SQL literal quoting、recover rows 清理和基于 SQLSTATE 的二阶段 already-ended 分类。
-- Oracle：具备只读 prepare 状态传播 mock 覆盖和配置文档的 `DBMS_XA` 实现，仍需真实数据库验证。
+- Oracle：具备 mock 覆盖、配置文档，并已通过 Oracle Free 加 go-ora 外部验证 wrapper 一阶段 prepare、二阶段提交、rollback、recover 和 readonly prepare；生产支持口径前仍建议补充更完整的 driver / edition 验证。
 - 厂商 adapter：用于包装外部 driver 的公开扩展 API，不引入直接厂商依赖。
 - 达梦：具备只读 prepare 状态传播 mock 覆盖；真实 driver 许可证、兼容模式、recover 输出和错误码验证前，只标记为 prototype resource。

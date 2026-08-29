@@ -79,6 +79,9 @@ It does not silently hash or truncate oversized XIDs.
   `PrepareContext` plus `StmtExecContext`.
 - Use an Oracle driver that can run recovery queries through `QueryerContext` or
   `PrepareContext` plus `StmtQueryContext`.
+- Use an Oracle driver that implements `driver.ConnBeginTx`; Seata Go opens a
+  driver-level transaction for Oracle `DBMS_XA` branches to keep drivers such as
+  go-ora out of autoCommit mode while the XA branch is active.
 - Grant the application user permission to execute the `DBMS_XA` package.
 - Confirm that the application can call `DBMS_XA.XA_RECOVER()` or has an
   equivalent recovery path before enabling production traffic.
@@ -108,6 +111,12 @@ Full package tests:
 go test ./pkg/datasource/sql/...
 ```
 
+External validation has also passed against Oracle Free `23.26.2.0.0` in
+`gvenzl/oracle-free:23-slim-faststart` with `github.com/sijms/go-ora/v2 v2.9.0`.
+That probe registered a `seata-xa-oracle`-style wrapper through
+`RegisterSeataXADriver`, completed phase-one prepare through `XAConn.BeginTx` /
+`XATx.Commit`, then completed phase-two through the held XA connection.
+
 There is no default Oracle integration test in this repository yet. A real
 Oracle validation must record:
 
@@ -127,7 +136,8 @@ Oracle validation must record:
 | --- | --- |
 | `TMNoFlags` on `Start` | Sent to `DBMS_XA.XA_START` as `TMNOFLAGS`; Oracle's JDBC loose-branch flag is not accepted by the direct `DBMS_XA` package call path. |
 | `TMFail` on `End` | Mapped internally to `TMSuccess` before rollback because Oracle `DBMS_XA.XA_END` does not accept `TMFAIL` in this implementation path. |
-| `XAPrepare` readonly | Reads the `DBMS_XA.XA_PREPARE` return code, treats both `XA_OK` and `XA_RDONLY` as successful prepare results, and reports `BranchStatusPhaseoneReadonly` upstream when `XA_RDONLY` is returned. Real driver output-bind behavior still needs database validation. |
+| Driver transaction state | Oracle `DBMS_XA` branches open a driver-level transaction before `XA_START` to disable driver autoCommit state. Normal prepared branches keep that driver transaction until phase two; readonly and rolled-back branches clean it up immediately. |
+| `XAPrepare` readonly | Reads the `DBMS_XA.XA_PREPARE` return code, treats both `XA_OK` and `XA_RDONLY` as successful prepare results, and reports `BranchStatusPhaseoneReadonly` upstream when `XA_RDONLY` is returned. Oracle Free plus go-ora validation confirmed the output-bind path for `XA_OK` and `XA_RDONLY`. |
 | Recovery scan | Uses `TABLE(DBMS_XA.XA_RECOVER())` and converts `formatid/gtrid/bqual` back to Seata branch XID strings. |
 | Already-ended classification | Classifies `ORA-24756`, `ORA-24761`, `XAER_NOTA`, and wrapped `DBMS_XA` numeric `XAER_NOTA` code `-4` as already-ended conditions. |
 
@@ -137,6 +147,7 @@ Oracle validation must record:
 | --- | --- |
 | `sql: driver does not support the use of Named Parameters` | The selected Oracle driver fell back to legacy statement execution and cannot bind the named parameters required by the DBMS_XA PL/SQL block. |
 | Prepare or statement execution fails during DBMS_XA calls | Confirm that the selected Oracle driver supports PL/SQL blocks with named binds either through connection-level context methods or statement-level context methods. |
+| `ORA-02089: COMMIT is not allowed in a subordinate session` | Confirm that the wrapper is using a version with DBMS_XA driver transaction state management and that the selected driver honors `ConnBeginTx` by disabling autoCommit. |
 | Readonly prepare is not reported | Confirm that the selected Oracle driver supports `database/sql.Out` named output binds for the `DBMS_XA.XA_PREPARE` result parameter. |
 | `ORA-01031: insufficient privileges` | Grant access to `DBMS_XA` or run validation with a user that has the required package privileges. |
 | `oracle xa gtrid exceeds RAW(64)` or `oracle xa bqual exceeds RAW(64)` | Shorten the global XID or use a future mapping strategy approved by the project. |
