@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"reflect"
 	"strings"
 
@@ -389,7 +390,30 @@ func parseResourceID(dsn string) string {
 	if i > 0 {
 		res = dsn[:i]
 	}
+	res = redactURLUserInfo(res)
+	res = redactDSNUserInfo(res)
 	return strings.ReplaceAll(res, ",", "|")
+}
+
+func redactURLUserInfo(resourceID string) string {
+	u, err := url.Parse(resourceID)
+	if err != nil || u.Scheme == "" || u.Host == "" || u.User == nil {
+		return resourceID
+	}
+	u.User = nil
+	return u.String()
+}
+
+func redactDSNUserInfo(resourceID string) string {
+	slash := strings.LastIndex(resourceID, "/")
+	if slash < 0 {
+		return resourceID
+	}
+	at := strings.LastIndex(resourceID[:slash], "@")
+	if at < 0 {
+		return resourceID
+	}
+	return resourceID[at+1:]
 }
 
 func selectDBVersion(ctx context.Context, conn driver.Conn) (string, error) {

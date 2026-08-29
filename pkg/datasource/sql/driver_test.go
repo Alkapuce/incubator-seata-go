@@ -278,6 +278,48 @@ func TestRegisterSeataXADriverReturnsParseDBNameErrorWithoutDSN(t *testing.T) {
 	assert.NotContains(t, err.Error(), "vendor-host")
 }
 
+func TestRegisterSeataXADriverRedactsResourceIDCredentials(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMgr := initMockResourceManager(branch.BranchTypeXA, ctrl)
+	_ = mockMgr
+
+	dsn := "user:secret@vendor-host:1521/service?connectTimeout=5"
+	mockDriver := mock.NewMockTestDriver(ctrl)
+	mockConn := mock.NewMockTestDriverConn(ctrl)
+	mockDriver.EXPECT().Open(dsn).AnyTimes().Return(mockConn, nil)
+	mockConn.EXPECT().Close().AnyTimes().Return(nil)
+
+	driverName := fmt.Sprintf("seata-xa-vendor-resource-id-%d", time.Now().UnixNano())
+	err := RegisterSeataXADriver(driverName, SeataDriverDescriptor{
+		DBType: types.DBTypeOracle,
+		Target: mockDriver,
+		ParseDBName: func(got string) (string, error) {
+			assert.Equal(t, dsn, got)
+			return "service", nil
+		},
+	})
+	assert.NoError(t, err)
+
+	db, err := sql.Open(driverName, dsn)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	v := reflect.ValueOf(db)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	field := v.FieldByName("connector")
+	fieldVal := reflectx.GetUnexportedField(field)
+	connector, ok := fieldVal.(*seataXAConnector)
+	assert.True(t, ok, "need return seata xa connector")
+	assert.Equal(t, "vendor-host:1521/service", connector.res.GetResourceId())
+	assert.NotContains(t, connector.res.GetResourceId(), "user:secret")
+	assert.NotContains(t, connector.res.GetResourceId(), "secret")
+}
+
 func TestRegisterSeataXADriverReturnsDuplicateRegistrationError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -295,4 +337,66 @@ func TestRegisterSeataXADriverReturnsDuplicateRegistrationError(t *testing.T) {
 	err := RegisterSeataXADriver(driverName, descriptor)
 	assert.ErrorContains(t, err, "register seata xa driver")
 	assert.ErrorContains(t, err, driverName)
+}
+
+func TestParseResourceIDRedactsCredentials(t *testing.T) {
+	tests := []struct {
+		name     string
+		dsn      string
+		expected string
+		redacted []string
+	}{
+		{
+			name:     "mysql",
+			dsn:      "root:password@tcp(127.0.0.1:3306)/seata_demo?multiStatements=true",
+			expected: "tcp(127.0.0.1:3306)/seata_demo",
+			redacted: []string{
+				"root:password",
+				"password",
+			},
+		},
+		{
+			name:     "postgres url",
+			dsn:      "postgres://postgres:password@127.0.0.1:5432/seata_demo?sslmode=disable",
+			expected: "postgres://127.0.0.1:5432/seata_demo",
+			redacted: []string{
+				"postgres:password",
+				"password",
+			},
+		},
+		{
+			name:     "vendor opaque",
+			dsn:      "user:secret@vendor-host:1521/service?connectTimeout=5",
+			expected: "vendor-host:1521/service",
+			redacted: []string{
+				"user:secret",
+				"secret",
+			},
+		},
+		{
+			name:     "comma replacement",
+			dsn:      "user:secret@vendor-host:1521,1522/service?connectTimeout=5",
+			expected: "vendor-host:1521|1522/service",
+			redacted: []string{
+				"user:secret",
+				"secret",
+			},
+		},
+		{
+			name:     "no credentials",
+			dsn:      "tcp(127.0.0.1:3306)/seata_demo?multiStatements=true",
+			expected: "tcp(127.0.0.1:3306)/seata_demo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resourceID := parseResourceID(tt.dsn)
+			assert.Equal(t, tt.expected, resourceID)
+			for _, s := range tt.redacted {
+				assert.NotContains(t, resourceID, s)
+			}
+			assert.NotContains(t, resourceID, "?")
+		})
+	}
 }

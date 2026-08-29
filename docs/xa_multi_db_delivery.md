@@ -35,7 +35,7 @@ pre-PR requirement-to-evidence checklist.
 | XA prepared statements | `XAConn.PrepareContext` now returns statements whose `StmtExecContext` / `StmtQueryContext` executions enter the same XA branch lifecycle as direct `ExecContext` / `QueryContext`; query rows still defer branch commit until `Rows.Close`. |
 | XA resource contract tests | Adds shared contract coverage for supported XA resource factories, resource/classifier registration, unknown DB type rejection, common recovery-scan flag behavior, invalid lifecycle flag rejection, transaction-timeout defaults, `IsSameRM`, and `XAResourcePrepareStatus` capability. |
 | Datasource resource group | `DBResource.GetResourceGroupId` now returns the current RM transaction service group instead of panicking, keeping the datasource resource interface aligned with the RM registration contract. |
-| Vendor adapters | Adds `RegisterSeataXADriver` and `SeataDriverDescriptor` so applications can register vendor `database/sql/driver.Driver` implementations without adding them as Seata Go dependencies; tests cover required DBType validation, explicit and default target names, parse-error propagation without adding the raw DSN, and duplicate registration errors. |
+| Vendor adapters | Adds `RegisterSeataXADriver` and `SeataDriverDescriptor` so applications can register vendor `database/sql/driver.Driver` implementations without adding them as Seata Go dependencies; tests cover required DBType validation, explicit and default target names, parse-error propagation without adding the raw DSN, duplicate registration errors, and credential redaction from RM resource IDs. |
 | Dameng prototype | Adds `types.DBTypeDM` and a `DBMS_XA`-based XA resource prototype with XID mapping, lifecycle calls, readonly prepare status reporting, recovery parsing with row cleanup, error classification, XAConn autoCommit plus explicit commit/rollback, timeout/prepare-failure, TC report-failure, phase-two held-connection release, and phase-two failure-status coverage, unit tests, and documentation. |
 | Kingbase and Oscar | Documents extension direction and open questions. Kingbase should be validated first against PostgreSQL-style prepared transactions. Oscar needs public Go driver, XA API, recovery, and error-code confirmation before code is added. |
 
@@ -58,7 +58,7 @@ go test ./pkg/datasource/sql/xa -run 'TestMysqlXAConn_LifecycleSQLQuotesXID|Test
 go test ./pkg/datasource/sql/xa -run 'TestPostgresXAConnLifecycleSQLQuotesXID' -v
 go test ./pkg/datasource/sql/xa -run 'Test(Mysql|MariaDB|Postgres)XAConn.*FallsBackToPrepare' -v
 go test ./pkg/datasource/sql -run 'TestXAConn_PreparedExecContext_AutoCommitCompletesXABranch|TestXAConn_PreparedQueryContext_AutoCommitDefersBranchCommitUntilRowsClose' -v
-go test ./pkg/datasource/sql -run 'TestRegisterSeataXADriver|TestXAConn_BeginTx_DBMSXADriverTxHeldUntilPhaseTwo|TestXAConn_BeginTx_DBMSXAReadonlyPrepareReportsReadonlyAndReleases' -v
+go test ./pkg/datasource/sql -run 'TestParseResourceID|TestRegisterSeataXADriver|TestXAConn_BeginTx_DBMSXADriverTxHeldUntilPhaseTwo|TestXAConn_BeginTx_DBMSXAReadonlyPrepareReportsReadonlyAndReleases' -v
 go test ./pkg/datasource/sql -run 'TestDBResourceGetResourceGroupIdUsesRMConfig|TestDBResourceCheckDbVersionControlsXAConnectionHold|TestXAResourceManager|TestXAConn_BeginTx|TestXAConn_ExecContext|TestXAConn_AutoCommit|TestXATx' -v
 go test ./pkg/datasource/sql/xa ./pkg/datasource/sql/types
 go test ./pkg/datasource/sql/...
@@ -110,7 +110,7 @@ adding go-ora to the project dependency graph.
 | XA branch type over gRPC | `BranchTypeProto` now explicitly includes `XA = 3`, matching the normal protocol `BranchTypeXA` value used by XA branch register, report, commit, and rollback messages; gRPC branch-register, branch-report, and branch-end processor tests cover the XA mapping. |
 | License headers | New Go and Markdown files include the Apache Software Foundation license header. |
 | Generated files | `dbtype_string.go` is updated together with DB type tests. |
-| Secrets | Documentation examples use placeholders and must not include real DSNs, passwords, wallets, or private deployment details. |
+| Secrets | Documentation examples use placeholders and must not include real DSNs, passwords, wallets, or private deployment details; generated RM resource IDs strip URL userinfo and MySQL/vendor-style `user:password@` prefixes before registration. |
 
 ## Suggested Pull Request Split
 

@@ -64,6 +64,7 @@ db, err := stdsql.Open("seata-xa-vendor", dsn)
 - 为厂商 `DBType` 注册或实现 XA resource factory。
 - 提供稳定的 Seata driver 名称，例如 `seata-xa-vendor`。
 - 从厂商 DSN 中解析数据库名，避免在日志中输出密码。
-- 增加单元测试，证明 wrapper 返回的 `XAConn` 具有预期 DB type、数据库名、DBType 必填校验、显式或默认 target driver name、parse error 传播时不额外拼接原始 DSN，并覆盖重复注册错误。
+- 确保由 DSN 派生的 RM resource ID 保持稳定，但不携带 URL userinfo 或 MySQL/vendor 风格的 `user:password@` 凭据。
+- 增加单元测试，证明 wrapper 返回的 `XAConn` 具有预期 DB type、数据库名、DBType 必填校验、显式或默认 target driver name、parse error 传播时不额外拼接原始 DSN、重复注册错误，以及 resource ID 凭据脱敏。
 - 增加集成测试，覆盖 start、end、prepare、commit、rollback、recover、branch missing 和重复二阶段回调。
 - 文档记录 driver 版本、数据库版本、权限、恢复行为和不支持的 XA flag。
